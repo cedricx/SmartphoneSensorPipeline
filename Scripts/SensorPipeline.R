@@ -17,7 +17,7 @@ source(paste(source_filepath, "Utility/Initialize.R",sep="/"))
 ###################################
 
 for(patient_name in patient_names){
-  cat("\n",patient_name,"\n")
+  cat("\nID: ",patient_name,"\n")
   # Preprocess Data
   surveys_preprocessing(patient_name)
   text_preprocessing(patient_name)
