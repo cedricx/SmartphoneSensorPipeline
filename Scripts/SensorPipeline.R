@@ -2,9 +2,10 @@
 ################    Beiwe Master Pipeline    ###################
 ################################################################
 
-source_filepath    = "~/Documents/GitHub/SmartphoneSensorPipeline/"
-data_filepath      = "~/Box/data_v2/"
-output_filepath    = "~/Documents/projects/gps"
+source_filepath    = "C:/Users/Ian/Documents/Beiwe-Analysis-master"
+data_filepath      = "C:/Users/Ian/Documents/SZtorous2/data"
+output_filepath    = "C:/Users/Ian/Documents/SZtorous2/output"
+
 
 
 # Source all files
