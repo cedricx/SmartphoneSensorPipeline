@@ -28,9 +28,9 @@ for (subj in subj_names){
       periods = periods[-grep("incorrect*",periods)]
     }
     for (period in periods){
+      period_path = file.path(old_beiwe_path,period)
       if (length(list.files(period_path)) > 0) {
         cat("\n   period: ", period)
-        period_path = file.path(old_beiwe_path,period)
         setwd(period_path)
         file.copy(list.files(period_path),new_beiwe_path,recursive = TRUE)
       } else {
