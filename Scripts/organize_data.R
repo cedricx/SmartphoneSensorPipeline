@@ -4,16 +4,17 @@ new_dir = "/Volumes/Storage/TDSlab/TedSleep/data_v2_chx/"
 dir.create(file.path(new_dir), showWarnings = FALSE)
 subj_names = list.files(old_dir)
 for (subj in subj_names){
-  cat("\nSubj: ", subj)
+  cat("\nSubj: ", subj, "...",which(subj_names == subj),"/",length(subj_names))
   new_path = file.path(new_dir,subj)
   dir.create(new_path)
   
   #### "actigraphy" ####
   cat("\n cp actigraphy")
   old_acti_path = file.path(old_dir,subj,"actigraphy")
+  new_acti_path = file.path(new_dir,subj,"actigraphy")
   if(file.exists(old_acti_path)) {
-    file.copy(old_acti_path,new_path,recursive = TRUE)
-  } else { cat("\n  no actigraphy") }
+      file.copy(old_acti_path,new_path,recursive = TRUE, overwrite = FALSE)
+      } else { cat("\n  no actigraphy") }
   
   #### "beiwe" ####
   cat("\n cp beiwe")
@@ -30,14 +31,12 @@ for (subj in subj_names){
     for (period in periods){
       period_path = file.path(old_beiwe_path,period)
       if (length(list.files(period_path)) > 0) {
-        cat("\n   period: ", period)
+        cat("\n   period: ", period, length(list.files(period_path,recursive = T)), "files")
         setwd(period_path)
-        file.copy(list.files(period_path),new_beiwe_path,recursive = TRUE)
+        file.copy(list.files(period_path),new_beiwe_path,recursive = TRUE, overwrite = FALSE)
       } else {
         cat("\n   period: no file in", period)
       }
     } 
   } else { cat("\n  no beiwe") }
 }
- 
-
