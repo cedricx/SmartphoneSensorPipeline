@@ -20,15 +20,22 @@ for (subj in subj_names){
   old_beiwe_path = file.path(old_dir,subj,"beiwe")
   if(file.exists(old_beiwe_path)) {
     new_beiwe_path = file.path(new_path,"beiwe")
-    dir.create(new_beiwe_path)
+    dir.create(new_beiwe_path, showWarnings = FALSE)
     
     periods = list.files(old_beiwe_path)
     periods = periods[periods!="archive"]
+    if (length(grep("incorrect*",periods)) >0 ) {
+      periods = periods[-grep("incorrect*",periods)]
+    }
     for (period in periods){
-      cat("\n   period: ", period)
-      period_path = file.path(old_beiwe_path,period)
-      setwd(period_path)
-      file.copy(list.files(period_path),new_beiwe_path,recursive = TRUE)
+      if (length(list.files(period_path)) > 0) {
+        cat("\n   period: ", period)
+        period_path = file.path(old_beiwe_path,period)
+        setwd(period_path)
+        file.copy(list.files(period_path),new_beiwe_path,recursive = TRUE)
+      } else {
+        cat("\n   period: no file in", period)
+      }
     } 
   } else { cat("\n  no beiwe") }
 }
