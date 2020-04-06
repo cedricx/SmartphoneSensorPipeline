@@ -30,7 +30,7 @@ for (subj in subj_names){
     }
     for (period in periods){
       period_path = file.path(old_beiwe_path,period)
-      if (length(list.files(period_path)) > 0) {
+      if (length(list.files(period_path,recursive = T)) > 0) {
         cat("\n   period: ", period, length(list.files(period_path,recursive = T)), "files")
         setwd(period_path)
         file.copy(list.files(period_path),new_beiwe_path,recursive = TRUE, overwrite = FALSE)
