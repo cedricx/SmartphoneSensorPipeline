@@ -1,7 +1,7 @@
 surveys_preprocessing = function(patient_name, ...){
   survey_data = list()
   surveys_data_filepath = paste(data_filepath, patient_name, "survey_answers",sep="/")
-  if(file.exists(surveys_data_filepath)){
+  if(length(list.files(surveys_data_filepath, recursive = T))>0){
     survey_names = list.files(surveys_data_filepath)
     for(survey_name in survey_names){
       surveys_filepath = paste(surveys_data_filepath,survey_name,sep="/")

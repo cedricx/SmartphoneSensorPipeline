@@ -2,9 +2,9 @@
 ################    Beiwe Master Pipeline    ###################
 ################################################################
 
-source_filepath    = "~/Box/data_v2"
-data_filepath      = "/Volumes/Storage/TDSlab/TedSleep/data_v2_chx/"
-output_filepath    = "/Volumes/Storage/TDSlab/TedSleep/data_v2_chx/output"
+source_filepath    = "~/Documents/GitHub/SmartphoneSensorPipeline/"
+data_filepath      = "/Volumes/Storage/TDSlab/TedSleep/data_v2_beiwe/"
+output_filepath    = "~/Documents/beiwe_output"
 
 
 
@@ -17,18 +17,29 @@ source(paste(source_filepath, "Utility/Initialize.R",sep="/"))
 ###################################
 
 for(patient_name in patient_names){
-  cat("\nID: ",patient_name,"\n")
+  cat("\nSubj: ", patient_name, "...",which(patient_names == patient_name),"/",length(patient_names))
   # Preprocess Data
+  cat("\     preprocessing...\n")
+  cat("\       surveys...\n")
   surveys_preprocessing(patient_name)
+  cat("\       text...\n")
   text_preprocessing(patient_name)
+  cat("\       calls...\n")
   calls_preprocessing(patient_name)
+  cat("\       power...\n")
   powerstate_preprocessing(patient_name)
+  cat("\       accelerometer...\n")
   accelerometer_preprocessing(patient_name, minutes = acc_binsize)
+  cat("\       GPS...\n")
   GPS_preprocessing(patient_name)
   # Process Data
+  cat("\    processing...\n")
+  cat("\       GPS imputation...\n")
   GPS_imputation(patient_name,nreps=1)
+  cat("\       create mobility...\n")
   CreateMobilityFeatures(patient_name)
   # Results
+  cat("\    results collection...\n")
   ContinuousDataCollectionTracks(patient_name, acc_binsize)
 }
 print("completed!")
