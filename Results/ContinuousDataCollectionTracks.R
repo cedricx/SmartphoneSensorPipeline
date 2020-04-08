@@ -153,7 +153,7 @@ GPSDataCollection = function(GPSmat,tol=5){
 SVYDataCollection = function(homedir,ID){
   cat("Scanning survey data...\n")
   svydir = paste(homedir,ID,"survey_answers",sep="/")
-  if(!file.exists(svydir)){return(NULL)}
+  if(length(list.files(svydir, recursive =T))<=0){return(NULL)}
   svynames=list.files(path=svydir,full.names=T)
   counter=0
   outvec = rep(NA,100)
