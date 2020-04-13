@@ -121,12 +121,12 @@ daily_features = function(...){
   SIDs=patient_names
   aIDs_full = list()
   mob_full = list()
+  qIDs = list()
   for(i in 1:length(SIDs)){
     patient_id=SIDs[[i]]
     # GPS
     mobmat=NULL
     aIDs=list()
-    qIDs = list()
     patient_input_filepath = paste(output_filepath, "/Processed_Data/Individual/", patient_id, sep="")
     patient_input_filename = paste(patient_input_filepath,"/MobFeatures.rds",sep="")
     if(file.exists(patient_input_filename)){
@@ -137,7 +137,7 @@ daily_features = function(...){
     mob_full[[patient_id]]=mobmat
     # Survey Answers
     patient_survey_filepath = paste(data_filepath,patient_id,"survey_answers",sep="/")
-    if(file.exists(patient_survey_filepath)){
+    if(length(list.files(patient_survey_filepath, recursive = T))>0){
       SurIDs=lapply(strsplit(list.dirs(patient_survey_filepath,recursive=FALSE),"/"),function(x) x[length(x)])
       if(length(SurIDs)>0){
         for(j in 1:length(SurIDs)){
