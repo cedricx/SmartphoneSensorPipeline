@@ -119,7 +119,6 @@ daily_features = function(...){
   patient_output_filepath = paste(output_filepath, "/Processed_Data/Group",sep="")
   patient_output_filename = paste(patient_output_filepath, "/feature_matrix.rds",sep="")
   SIDs=patient_names
-  qIDs = list()
   aIDs_full = list()
   mob_full = list()
   for(i in 1:length(SIDs)){
@@ -127,6 +126,7 @@ daily_features = function(...){
     # GPS
     mobmat=NULL
     aIDs=list()
+    qIDs = list()
     patient_input_filepath = paste(output_filepath, "/Processed_Data/Individual/", patient_id, sep="")
     patient_input_filename = paste(patient_input_filepath,"/MobFeatures.rds",sep="")
     if(file.exists(patient_input_filename)){
