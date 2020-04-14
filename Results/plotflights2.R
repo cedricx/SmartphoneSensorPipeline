@@ -139,12 +139,12 @@ plot.flights2 <-
         text(xleg2,yrang[1]+31*yincr,"1 Hr Pause",adj=0,cex=.5)
         points(xleg_mid,yrang[1]+33*yincr,cex=.5,pch=16)
         text(xleg2,yrang[1]+33*yincr,"<30 Min Pause",adj=0,cex=.5)
-        text(xleg2,yrang[1]+35*yincr,"Calls",adj=0,cex=.5)
-        text(xleg2,yrang[1]+37*yincr,"Texts",adj=0,cex=.5)
-        GPSarrow(xleg1,yrang[1]+35*yincr, arrowcolor = light_color(cerulean, ink_depth = .5),  length=(xrang[2]-xrang[1])*.025, arrow_thickness = 1.2, arrow_width = 1, solid_arrowhead_length = .35,max_text_length=max_text_length, max_call_length=max_call_length,call_brightness=call_brightness,xrang = xrang, yrang = yrang)
-        GPSarrow(xleg1,yrang[1]+37*yincr, arrowcolor = light_color(vermillion, ink_depth = .5),length=(xrang[2]-xrang[1])*.025, arrow_thickness = 1.2, arrow_width = 1, solid_arrowhead_length = .35,max_text_length=max_text_length, max_call_length=max_call_length,call_brightness=call_brightness,xrang = xrang, yrang = yrang)
-        points(mean(xleg_mid,xleg2),yrang[1]+39*yincr,cex=.5,pch=16, col = light_color(limegreen, 1))
-        text(xleg2,yrang[1]+39*yincr,"Screen On/Off",adj=0,cex=.5)
+        #text(xleg2,yrang[1]+35*yincr,"Calls",adj=0,cex=.5)
+        #text(xleg2,yrang[1]+37*yincr,"Texts",adj=0,cex=.5)
+        #GPSarrow(xleg1,yrang[1]+35*yincr, arrowcolor = light_color(cerulean, ink_depth = .5),  length=(xrang[2]-xrang[1])*.025, arrow_thickness = 1.2, arrow_width = 1, solid_arrowhead_length = .35,max_text_length=max_text_length, max_call_length=max_call_length,call_brightness=call_brightness,xrang = xrang, yrang = yrang)
+        #GPSarrow(xleg1,yrang[1]+37*yincr, arrowcolor = light_color(vermillion, ink_depth = .5),length=(xrang[2]-xrang[1])*.025, arrow_thickness = 1.2, arrow_width = 1, solid_arrowhead_length = .35,max_text_length=max_text_length, max_call_length=max_call_length,call_brightness=call_brightness,xrang = xrang, yrang = yrang)
+        #points(mean(xleg_mid,xleg2),yrang[1]+39*yincr,cex=.5,pch=16, col = light_color(limegreen, 1))
+        #text(xleg2,yrang[1]+39*yincr,"Screen On/Off",adj=0,cex=.5)
         #text(xleg1,yrang[1]+32.3*yincr,"Pause\nDuration",adj=0,cex=.5)
       }
       if(addscale){
