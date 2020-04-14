@@ -59,10 +59,13 @@ GPSarrow = function(x, y,
 
 plot.flights2 <-
   function(mat,xrang=NULL,yrang=NULL,diminch=6,add2plot=FALSE,addscale = TRUE, addlegend=TRUE,
-           outfile=NULL,title=NULL, main_rectangle = NA,...){
+           outfile=NULL,title=NULL, main_rectangle = NA, colorscale = "c",...){
 
-    #col24hour_v=c(c("#08306b","#08519c","#2171b5","#4292c6","#6baed6","#9ecae1","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#99000d"),rev(c("#08306b","#08519c","#2171b5","#4292c6","#6baed6","#9ecae1","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#99000d")))
-    col24hour_v=gray(seq(.85,.15,length.out=24))
+    if (colorscale=="bw"){
+      col24hour_v=gray(seq(.85,.15,length.out=24))
+    } else {
+      col24hour_v=c(c("#08306b","#08519c","#2171b5","#4292c6","#6baed6","#9ecae1","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#99000d"),rev(c("#08306b","#08519c","#2171b5","#4292c6","#6baed6","#9ecae1","#fcbba1","#fc9272","#fb6a4a","#ef3b2c","#cb181d","#99000d")))
+    }
     
     if(nrow(mat)==0){
       return(NULL)
@@ -172,7 +175,7 @@ plot.flights2 <-
     }
   }
 
-daily_subsets = function(mat, time_string = "t0", end_time_string = NA, tz="",...){
+daily_subsets = function(mat, time_string = "t0", end_time_string = "t1", tz="",...){
   curdate=strsplit(as.character(as.POSIXct(as.numeric(mat[1,time_string]),tz=tz,origin="1970-01-01"))," ")[[1]][1]
   curtime=strsplit(strsplit(as.character(as.POSIXct(as.numeric(mat[1,time_string]),tz=tz,origin="1970-01-01"))," ")[[1]][2],":")
   subsetinds_v = list()
