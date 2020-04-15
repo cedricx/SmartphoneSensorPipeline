@@ -123,7 +123,7 @@ plot.flights2 <-
       xleg2=xleg1+(xrang[2]-xrang[1])*.038
       xleg_mid = xleg1 + (xrang[2]-xrang[1])*.015
       yincr=(yrang[2]-yrang[1]) * 0.022
-      legtext=c(" 6AM"," 12PM"," 6PM"," 12AM")
+      legtext=c(" 6PM"," 12PM"," 6AM"," 12AM")
       if(addlegend){
         for(i in 1:24){
           polygon(c(xleg1,xleg1,xleg2,xleg2),c(yrang[1]+(i-1)*yincr,yrang[1]+i*yincr,yrang[1]+i*yincr,yrang[1]+(i-1)*yincr),col=col24hour_v[i])
