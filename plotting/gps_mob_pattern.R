@@ -5,7 +5,6 @@ for (patient in patient_names){
   gps_mobmat <- readRDS(gps_mob_path)$mobmatsims[[1]]
   gps_hours <- hours(gps_mobmat[,4])
   gps_mobmat_hr <- cbind(gps_mobmat,gps_hours)
-  gps_mobmat_hr[1,]
   gps_null <- data.frame(code=2,x0=0,y0=0,t0=1555546750,
                          x1=NA,y1=NA,t1=1555546751,hours=20,days='2019-04-17')
   daily_index <- daily_subsets(gps_mobmat)

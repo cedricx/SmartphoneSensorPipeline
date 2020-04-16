@@ -1,33 +1,21 @@
 
-gps_mob_video <- function(patient, day_i, gps_mobmat_hr){
+gps_mob_video <- function(patient, day_i, gps_mobmat_hr, overwrite = T){
   gps_movie_path <- file.path(output_filepath,"Results","Individual",patient,"gps_movie")
   dir.create(gps_movie_path, showWarnings = F)
+  png_files = file.path(gps_movie_path,paste0("day_", str_pad(day_i,3,pad = "0"),"_t*.png"))
+  mpg_file = file.path(gps_movie_path,paste0(patient, "_day_",str_pad(day_i,3,pad = "0"),".mpg"))
+  
   gps_mobmat_day <- gps_mobmat_hr[daily_index[[day_list[day_i]]],]
   
-  xrang=plotlimits(gps_mobmat_day)$xrang
-  yrang=plotlimits(gps_mobmat_day)$yrang
-  
-  
-  for (t in 1:dim(gps_mobmat_day)[1]) {
-    gps_time = round(hours(gps_mobmat_day$t1[t])['hours'],2)
-    gps_hr = strsplit(as.character(gps_time),split = "[.]")[[1]][1]
-    gps_min = round(as.numeric(strsplit(as.character(gps_time),split = "[.]")[[1]][2])*0.6,0)
-    gps_hr = str_pad(gps_hr,2,pad="0")
-    gps_min = str_pad(gps_min,2,pad="0")
-    if (is.na(gps_min)) gps_min = 0
-    gps_time_title = paste0("ID: ", substr(patient,1,6), ", Day: ",day_i,", Time: ", gps_hr,":",gps_min)
-    png(file.path(gps_movie_path,paste0("day_",day_i,"_t",str_pad(t, 4, pad = "0"),".png")),width = 5,height = 5, units = 'in', res = 300)
-      plot.flights2(gps_mobmat_day[1:t,],diminch = diminch, xrang = xrang, yrang= yrang,
-                  addlegend = T, title = gps_time_title)
-    dev.off()
-  }
-  
-  png_files = file.path(gps_movie_path,paste0("day_", day_i,"_t*.png"))
-  mpg_file = file.path(gps_movie_path,paste0(patient, "_day_",day_i,".mpg"))
-  cat("\  creating movies")
-  make.mov( speed = 1, png_files = png_files,  mpg_file = mpg_file)
-
+  if(overwrite == T | !file.exists(mpg_file) | !file.info(mpg_file)$size >0){
+    day_png_files(gps_mobmat_day)
+    cat("\  creating new movies")
+    make.mov( speed = 1, png_files = png_files,  mpg_file = mpg_file)
+  } else {
+    cat("\  movie already exists")
+    }
 }
+
 
 
 for (patient in patient_names){
@@ -48,7 +36,7 @@ for (patient in patient_names){
     if (!nchar(day_list[day_i]) >0){
       cat("\  no data...skip")
     } else {
-      gps_mob_video(patient = patient, day_i = day_i, gps_mobmat_hr = gps_mobmat_hr)
+      gps_mob_video(patient = patient, day_i = day_i, gps_mobmat_hr = gps_mobmat_hr, overwrite = F)
     }
   }
   
