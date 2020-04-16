@@ -297,6 +297,7 @@ make.mov <- function(speed, png_files, mpg_file){
 day_png_files <- function(gps_mobmat_day) {
   xrang=plotlimits(gps_mobmat_day)$xrang
   yrang=plotlimits(gps_mobmat_day)$yrang
+  unlink(file.path(gps_movie_path,"day_*"))
   
   for (t in 1:dim(gps_mobmat_day)[1]) {
     gps_day = weekdays(as.Date(hours(gps_mobmat_day$t1[t])['days']$days), abbreviate = T)
@@ -308,7 +309,7 @@ day_png_files <- function(gps_mobmat_day) {
     if (is.na(gps_min)) gps_min = 0
     gps_time_title = paste0("ID: ", substr(patient,1,6), ", Day: ",day_i, " (",gps_day,")",", Time: ", gps_hr,":",gps_min)
     png_file_path <- file.path(gps_movie_path,paste0("day_",day_i,"_t",str_pad(t, 4, pad = "0"),".png"))
-    unlink(file.path(gps_movie_path,"day_*"))
+    
     png(png_file_path,width = 5,height = 5, units = 'in', res = 300)
     plot.flights2(gps_mobmat_day[1:t,],diminch = diminch, xrang = xrang, yrang= yrang,
                   addlegend = T, title = gps_time_title)
