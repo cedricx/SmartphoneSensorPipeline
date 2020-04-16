@@ -1,9 +1,29 @@
 library(ggplot2)
 library(cowplot)
 library(gridExtra)
+require(dplyr) 
 
+
+source_filepath    = "~/Documents/GitHub/SmartphoneSensorPipeline/"
+data_filepath      = "/Volumes/Storage/TDSlab/TedSleep/data_v2_beiwe/"
+output_filepath    = "~/Documents/beiwe_output"
 featureMat<-readRDS(file.path(output_filepath,"Processed_Data","Group","feature_matrix_clean.RDS"))[[1]]
-minutesMissing <- data.frame(mins = as.numeric(featureMat$MinsMissing))
+featureMat_trunc = data.frame()
+for (id in unique(featureMat$IID)){
+  featMat_id <- subset(featureMat, IID == id)
+  featMat_id <- featMat_id[2:(dim(featMat_id)[1]-1),]
+  featureMat_trunc <- rbind(featureMat_trunc,featMat_id)
+}
+
+featureMat_dataends <- anti_join(featureMat,featureMat_trunc)
+###########
+featureMat_trunc$ID_abb <- unlist(lapply(featureMat_trunc$IID,function(long_id) substr(long_id,1,5)))
+
+
+
+##########
+
+minutesMissing <- data.frame(mins = as.numeric(featureMat_trunc$MinsMissing))
 
 minMiss_histplot<-function(data, bins, percent = T){
   total_days = dim(data)[1]
@@ -37,11 +57,57 @@ minMiss_histplot<-function(data, bins, percent = T){
   }
 }
 
+mins_hist_full_notrunc <-minMiss_histplot(data.frame(mins = as.numeric(featureMat$MinsMissing)), 200, percent= F)
+mins_hist_dataends <- minMiss_histplot(data.frame(mins = as.numeric(featureMat_dataends$MinsMissing)), 200, percent= F)
 mins_hist_full <-minMiss_histplot(minutesMissing, 200, percent= F)
 mins_hist_part <-minMiss_histplot(subset(minutesMissing, mins >= 1296), 200, percent= F)
 mins_hist_part_cutoff <-minMiss_histplot(subset(minutesMissing, mins >= 1296), 200, percent= T)
-par(mfrow=c(3 ,1))
-mins_hist_full
-mins_hist_part
-mins_hist_part_cutoff
-grid.arrange(mins_hist_full, mins_hist_part,mins_hist_part_cutoff, nrow = 3)
+mins_hist_low <-minMiss_histplot(subset(minutesMissing, mins < 1296), 200, percent= F)
+
+grid.arrange(mins_hist_full_notrunc, mins_hist_dataends, mins_hist_full,mins_hist_low,
+             mins_hist_part,mins_hist_part_cutoff, nrow = 6)
+
+
+###############################################################################
+featureMat_trunc$MinsMissing <- as.numeric(featureMat_trunc$MinsMissing)
+featureMat_trunc$ProbPause <- as.numeric(featureMat_trunc$ProbPause)
+featureMat_trunc_ID_count <- as.data.frame(table(featureMat_trunc$ID_abb))
+colnames(featureMat_trunc_ID_count) <- c("ID","count")
+cutoffs <- c(.75,0.8,0.9)
+cutoffs_plots = list()
+cutoffs_plots_percent = list()
+for (cutoff in cutoffs){
+  cutoff_val <- round(quantile(featureMat_trunc$MinsMissing,cutoff),0)
+  featMat_cutoff = subset(featureMat_trunc, MinsMissing>cutoff_val)
+  featMat_cutoff_ID_count <- as.data.frame(table(featMat_cutoff$ID_abb))
+  colnames(featMat_cutoff_ID_count) <- c("ID","count")
+  featMat_cutoff_ID_count <- merge(featureMat_trunc_ID_count,featMat_cutoff_ID_count,by = "ID")
+  colnames(featMat_cutoff_ID_count) <- c("ID","count_total","count_cutoff")
+  featMat_cutoff_ID_count$count_percent <- featMat_cutoff_ID_count$count_cutoff / featMat_cutoff_ID_count$count_total
+  p<-ggplot(featMat_cutoff_ID_count, aes(reorder(ID,count_cutoff),count_cutoff))+ 
+    geom_bar(fill = "red", alpha = cutoff*3-2, stat="identity")  + xlab("ID") + ylim(c(0,80)) +
+    ggtitle(paste("Cutoff at ",cutoff, ", n =",dim(featMat_cutoff)[1])) + ylab("Days") +
+    coord_flip() + theme_cowplot() + theme(plot.title = element_text(hjust = 1))
+  cutoffs_plots[[which(cutoffs == cutoff)]] = p
+  q<-ggplot(featMat_cutoff_ID_count, aes(reorder(ID,count_percent),count_percent))+ 
+    geom_bar(fill = "orange", alpha = cutoff*3-2, stat="identity")  + xlab("ID") + ylim(c(0,1)) +
+    ggtitle(paste("Cutoff at ",cutoff, ", n =",dim(featMat_cutoff)[1])) + ylab("Percent of all days recorded") +
+    coord_flip() + theme_cowplot() + theme(plot.title = element_text(hjust = 1))
+  cutoffs_plots_percent[[which(cutoffs == cutoff)]] = q
+  }
+
+do.call("grid.arrange", c(cutoffs_plots, cutoffs_plots_percent, ncol=3, nrow=2))
+
+
+#####################33
+miss_points <- list(all = c(0,1440),mean_to_high = c(1377,1440), no_high = c(0,1433))
+miss_point = miss_points[[3]]
+miss_point_df <-subset(featureMat_trunc, MinsMissing>=miss_point[1] & MinsMissing <= miss_point[2])
+miss_point_df <- data.frame(mins = as.numeric(miss_point_df$MinsMissing), ProbPause = as.numeric(miss_point_df$ProbPause))
+cor.test(miss_point_df$mins,miss_point_df$ProbPause,use = "na.or.complete")
+
+
+ggplot(miss_point_df, aes(x=mins, y=ProbPause) ) +
+  geom_point(color = "lightgrey")  + theme_cowplot() + geom_smooth(method=lm, color="black" )
+
+
