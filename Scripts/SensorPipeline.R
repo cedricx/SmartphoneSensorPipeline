@@ -10,7 +10,7 @@ output_filepath    = "~/Documents/beiwe_output"
 
 # Source all files
 source(paste(source_filepath, "Utility/Initialize.R",sep="/"))
-
+patient_names = list.files(file.path(output_filepath,"Preprocessed_Data","Individual"))
 
 ###################################
 ### individual patient analysis ###

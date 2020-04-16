@@ -70,9 +70,6 @@ patient_trajectories_plots = function(pltname,y,X,dat,surveylab=NULL,MMH=1400,MM
 # outdir = "C:/Users/Ian/Documents/Work/JP/Schizophrenia/Output"
 # PatientTrajectories(featurefile,outdir)
 
-featurefile = "~/Documents/beiwe_output/Processed_Data/Group/feature_matrix.txt"
-outdir = "~/Documents/beiwe_output"
-PatientTrajectories(featurefile,outdir)
 PatientTrajectories = function(featurefile,outdir,pltname=NULL,inds=NULL,labels=NULL){
   MinsMissingCutLOW=1200
   MinsMissingCutHIGH=1440
