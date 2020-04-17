@@ -16,13 +16,15 @@ for (id in unique(featureMat$IID)){
   featMat_id <- featMat_id[2:(dim(featMat_id)[1]-1),]
   featureMat_trunc <- rbind(featureMat_trunc,featMat_id)
 }
+featureMat_trunc$ID_abb <- unlist(lapply(featureMat_trunc$IID,function(long_id) substr(long_id,1,5)))
 
 featureMat_dataends <- anti_join(featureMat,featureMat_trunc)
 ###########
-featureMat_trunc$ID_abb <- unlist(lapply(featureMat_trunc$IID,function(long_id) substr(long_id,1,5)))
 
-
-
+below1296<-subset(featureMat_trunc, minutesMissing<1296)
+for (i in 1:dim(below1296)[1]){
+  cat("\n ",below1296$ID_abb[i],below1296$Date[i],round(as.numeric(below1296$MinsMissing[i]),0))
+}
 ##########
 
 minutesMissing<- data.frame(mins = as.numeric(featureMat_trunc$MinsMissing))

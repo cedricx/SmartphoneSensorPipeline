@@ -1,6 +1,6 @@
 
 gps_mob_video <- function(patient, day_i, gps_mobmat_hr, overwrite = T){
-  gps_movie_path <- file.path(output_filepath,"Results","Individual",patient,"gps_movie")
+  gps_movie_path <<- file.path(output_filepath,"Results","Individual",patient,"gps_movie")
   dir.create(gps_movie_path, showWarnings = F)
   png_files = file.path(gps_movie_path,paste0("day_", str_pad(day_i,3,pad = "0"),"_t*.png"))
   mpg_file = file.path(gps_movie_path,paste0(patient, "_day_",str_pad(day_i,3,pad = "0"),".mpg"))

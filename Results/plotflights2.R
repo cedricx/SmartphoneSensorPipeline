@@ -290,7 +290,7 @@ total_plot = function(mob_layer, textmat_layer=NA, textlocs_layer=NA,callmat_lay
 
 make.mov <- function(speed, png_files, mpg_file){
   unlink(mpg_file)
-  system(paste("convert -limit memory 2000mb -delay", speed, png_files, mpg_file))
+  system(paste("convert  -delay", speed, png_files, mpg_file)) #-limit memory 2000mb
   if (file.exists(mpg_file) & file.info(mpg_file) >0 ) unlink(png_files)
 }
 
