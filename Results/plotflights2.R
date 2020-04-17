@@ -290,8 +290,8 @@ total_plot = function(mob_layer, textmat_layer=NA, textlocs_layer=NA,callmat_lay
 
 make.mov <- function(speed, png_files, mpg_file){
   unlink(mpg_file)
-  system(paste("convert -limit memory 500mb -delay", speed, png_files, mpg_file))
-  unlink(png_files)
+  system(paste("convert -limit memory 2000mb -delay", speed, png_files, mpg_file))
+  if (file.exists(mpg_file) & file.info(mpg_file) >0 ) unlink(png_files)
 }
 
 day_png_files <- function(gps_mobmat_day) {
@@ -307,8 +307,8 @@ day_png_files <- function(gps_mobmat_day) {
     gps_hr = str_pad(gps_hr,2,pad="0")
     gps_min = str_pad(gps_min,2,pad="0")
     if (is.na(gps_min)) gps_min = 0
-    gps_time_title = paste0("ID: ", substr(patient,1,6), ", Day: ",day_i, " (",gps_day,")",", Time: ", gps_hr,":",gps_min)
-    png_file_path <- file.path(gps_movie_path,paste0("day_",day_i,"_t",str_pad(t, 4, pad = "0"),".png"))
+    gps_time_title = paste0("ID: ", substr(patient,1,6), ", Day: ",str_pad(day_i,3,pad = "0"), " (",gps_day,")",", Time: ", gps_hr,":",gps_min)
+    png_file_path <- file.path(gps_movie_path,paste0("day_",str_pad(day_i,3,pad = "0"),"_t",str_pad(t, 4, pad = "0"),".png"))
     
     png(png_file_path,width = 5,height = 5, units = 'in', res = 300)
     plot.flights2(gps_mobmat_day[1:t,],diminch = diminch, xrang = xrang, yrang= yrang,
