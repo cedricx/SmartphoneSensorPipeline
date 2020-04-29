@@ -3,7 +3,7 @@ for (patient in patient_names){
   cat("\nSubj: ", patient, "...",which(patient_names == patient),"/",length(patient_names))
   gps_mob_path <- file.path(output_filepath,"Processed_Data","Individual",patient,"gps_imputed_mobmat.rds")
   gps_mobmat <- readRDS(gps_mob_path)$mobmatsims[[1]]
-  gps_hours <- hours(gps_mobmat[,4])
+  gps_hours <- hours(gps_mobmat[,7])
   gps_mobmat_hr <- cbind(gps_mobmat,gps_hours)
   gps_null <- data.frame(code=2,x0=0,y0=0,t0=1555546750,
                          x1=NA,y1=NA,t1=1555546751,hours=20,days='2019-04-17')
@@ -30,21 +30,21 @@ for (patient in patient_names){
       if (i<=7){
         if (!nchar(gps_day)>0) {
           gps_mobmat_day <- gps_null
-          plot.flights2(gps_mobmat_day, title = dayofweek[i], addscale = F, addlegend = F)
+          plot.flights2(gps_mobmat_day, title = paste(dayofweek[i], "\n no data"), addscale = F, addlegend = F)
         } else {
           gps_mobmat_day <- gps_mobmat_hr[daily_index[[gps_day]],]
           plot.flights2(gps_mobmat_day, #xrang = xrang, yrang= yrang,
-                        title = dayofweek[i])
+                        title = paste(dayofweek[i],'\n ', gps_day))
         }
       } else {
         if (!nchar(gps_day)>0) {
           gps_mobmat_day <- gps_null
-          plot.flights2(gps_mobmat_day, addscale = F, addlegend = F)
+          plot.flights2(gps_mobmat_day, title = paste("\n no data"), addscale = F, addlegend = F)
         } else {
           gps_mobmat_day <- gps_mobmat_hr[daily_index[[gps_day]],]
           diminch = 10
           plot.flights2(gps_mobmat_day,diminch = diminch, #xrang = xrang, yrang= yrang,
-                        addlegend = T)
+                        addlegend = T, title = paste('\n ', gps_day))
         }
       }
     }

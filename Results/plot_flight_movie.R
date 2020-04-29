@@ -42,3 +42,34 @@ for (patient in patient_names){
   
 }
   
+
+make_gps_mob_video <- function(patient, day_i, overwrite = T){
+  # mapping out file paths
+  gps_movie_path <- file.path(output_filepath,"Results","Individual",patient,"gps_movie")
+  dir.create(gps_movie_path, showWarnings = F)
+  gps_mob_path <- file.path(output_filepath,"Processed_Data","Individual",patient,"gps_imputed_mobmat.rds")
+  png_files = file.path(gps_movie_path,paste0("day_", str_pad(day_i,3,pad = "0"),"_t*.png"))
+  mpg_file = file.path(gps_movie_path,paste0(patient, "_day_",str_pad(day_i,3,pad = "0"),".mpg"))
+  
+  # get data
+  gps_mobmat <- readRDS(gps_mob_path)$mobmatsims[[1]]
+  gps_hours <- hours(gps_mobmat[,4])
+  gps_mobmat_hr <- cbind(gps_mobmat,gps_hours)
+  daily_index <- daily_subsets(gps_mobmat)
+  day_list <- names(daily_index)
+  gps_mobmat_day <- gps_mobmat_hr[daily_index[[day_list[day_i]]],]
+  
+  # make pngs and then movie
+  if(overwrite == T | !file.exists(mpg_file) | !file.info(mpg_file)$size >0){
+    cat("\n making pngs for", patient, "day", day_i)
+    day_png_files(gps_mobmat_day, gps_movie_path, day_i, patient)
+    cat("\n  creating new movie for", patient, "day", day_i)
+    make.mov( speed = 1, png_files = png_files,  mpg_file = mpg_file)
+  } else {
+    cat("\n  movie already exists for", patient, "day", day_i)
+  }
+  
+  
+  
+  
+}

@@ -291,14 +291,14 @@ total_plot = function(mob_layer, textmat_layer=NA, textlocs_layer=NA,callmat_lay
 make.mov <- function(speed, png_files, mpg_file){
   unlink(mpg_file)
   system(paste("convert  -delay", speed, png_files, mpg_file)) #-limit memory 2000mb
-  if (file.exists(mpg_file) & file.info(mpg_file) >0 ) unlink(png_files)
+  if (file.exists(mpg_file) && file.info(mpg_file) >0 ) unlink(png_files)
 }
 
-day_png_files <- function(gps_mobmat_day) {
+day_png_files <- function(gps_mobmat_day, gps_movie_path, day_i, patient) {
   xrang=plotlimits(gps_mobmat_day)$xrang
   yrang=plotlimits(gps_mobmat_day)$yrang
   unlink(file.path(gps_movie_path,"day_*"))
-  
+  cat("\n ID:", patient, "has data points:", dim(gps_mobmat_day)[1])
   for (t in 1:dim(gps_mobmat_day)[1]) {
     gps_day = weekdays(as.Date(hours(gps_mobmat_day$t1[t])['days']$days), abbreviate = T)
     gps_time = round(hours(gps_mobmat_day$t1[t])['hours'],2)
@@ -307,7 +307,7 @@ day_png_files <- function(gps_mobmat_day) {
     gps_hr = str_pad(gps_hr,2,pad="0")
     gps_min = str_pad(gps_min,2,pad="0")
     if (is.na(gps_min)) gps_min = 0
-    gps_time_title = paste0("ID: ", substr(patient,1,6), ", Day: ",str_pad(day_i,3,pad = "0"), " (",gps_day,")",", Time: ", gps_hr,":",gps_min)
+    gps_time_title = paste0("ID: ", substr(patient,1,6), ", Day: ",str_pad(day_i,3,pad = "0"), " (",gps_day,")",", Time: ", gps_hr,":",gps_min,"\n ",as.Date(hours(gps_mobmat_day$t1[t])['days']$days))
     png_file_path <- file.path(gps_movie_path,paste0("day_",str_pad(day_i,3,pad = "0"),"_t",str_pad(t, 4, pad = "0"),".png"))
     
     png(png_file_path,width = 5,height = 5, units = 'in', res = 300)

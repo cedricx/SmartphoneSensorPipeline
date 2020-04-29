@@ -6,7 +6,7 @@ library(ggExtra)
 library(ggpubr)
 
 
-source_filepath    = "~/Documents/GitHub/SmartphoneSensorPipeline/"
+source_filepath = "~/Documents/GitHub/SmartphoneSensorPipeline/"
 data_filepath      = "/Volumes/Storage/TDSlab/TedSleep/data_v2_beiwe/"
 output_filepath    = "~/Documents/beiwe_output"
 featureMat<-readRDS(file.path(output_filepath,"Processed_Data","Group","feature_matrix_clean.RDS"))[[1]]
@@ -21,10 +21,14 @@ featureMat_trunc$ID_abb <- unlist(lapply(featureMat_trunc$IID,function(long_id) 
 featureMat_dataends <- anti_join(featureMat,featureMat_trunc)
 ###########
 
-below1296<-subset(featureMat_trunc, minutesMissing<1296)
+below1296<-subset(featureMat_trunc, featureMat_trunc$MinsMissing<1296)
+below1296_movie_list <- list()
 for (i in 1:dim(below1296)[1]){
-  cat("\n ",below1296$ID_abb[i],below1296$Date[i],round(as.numeric(below1296$MinsMissing[i]),0))
+  first_day = featureMat_trunc$Date[which(featureMat_trunc$ID_abb == below1296$ID_abb[i])[1]]
+  below1296_movie_list[[i]]=data.frame(patient=below1296$IID[i],day_i=as.numeric(as.Date(below1296$Date[i])-as.Date(first_day) +2), date = below1296$Date[i], minsMissing = round(as.numeric(below1296$MinsMissing[i]),0))
 }
+lapply(below1296_movie_list, function(person_day) make_gps_mob_video(patient = as.character(person_day$patient),day_i = person_day$day_i, overwrite = F))
+
 ##########
 
 minutesMissing<- data.frame(mins = as.numeric(featureMat_trunc$MinsMissing))
@@ -132,3 +136,36 @@ missing_scatter_plots[[names(miss_points)[i]]]<-ggMarginal(p, type="histogram", 
 pdf(file.path(output_filepath,"Processed_Data","Group","missing_pause_cor.pdf"),width = 8,height = 8)
 do.call("grid.arrange", c(missing_scatter_plots, ncol=2, nrow=2))
 dev.off()
+
+
+######
+gps_featmat_missing_df <- data.frame(Patient = NA, Date=NA, Missing_in_FeatMat= NA, ProPause=NA, MinsMissing=NA)
+gps_featmat_missing_df <- gps_featmat_missing_df[-1,]
+for (patient in patient_names){
+  cat('\n', patient)
+  gps_mob_path <- file.path(output_filepath,"Processed_Data","Individual",patient,"gps_imputed_mobmat.rds")
+  gps_mobmat <- readRDS(gps_mob_path)$mobmatsims[[1]]
+  daily_index <- daily_subsets(gps_mobmat)
+  day_list <- names(daily_index)
+  empty_days =  which(day_list=="")
+  for (idx in empty_days){
+    day_list[idx] = as.character(as.Date(day_list[idx-1])+1)
+  }
+  gps_missing_days = day_list[empty_days]
+  if (length(empty_days) == 0) {
+    cat('\    ...    no missing')
+  } else {
+    for (i in 1:length(gps_missing_days)){
+      gpsMiss_df= subset(featureMat_trunc,featureMat_trunc$IID== patient & featureMat_trunc$Date== gps_missing_days[i])
+      if (nrow(gpsMiss_df) >0){
+        cat('\n    ',gpsMiss_df$Date,gpsMiss_df$ProbPause,gpsMiss_df$MinsMissing)
+        new_obs = data.frame(Patient = patient, Date=gpsMiss_df$Date, Missing_in_FeatMat= 0, ProPause=gpsMiss_df$ProbPause, MinsMissing=gpsMiss_df$MinsMissing)
+        gps_featmat_missing_df = rbind(gps_featmat_missing_df,new_obs)
+      } else {
+        cat('\n    ',gps_missing_days[i],'also missing in featmat')
+        new_obs = data.frame(Patient = patient, Date=gps_missing_days[i], Missing_in_FeatMat= 1, ProPause=NA, MinsMissing=NA)
+        gps_featmat_missing_df = rbind(gps_featmat_missing_df,new_obs)
+      }
+    }
+  }
+}

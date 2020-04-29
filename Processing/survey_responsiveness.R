@@ -3,7 +3,7 @@ survey_responsiveness = function(...){
   colnames(total) = c("Person","Survey_ID","Notified","Present","Submitted")
   j=1
   for(patient_name in patient_names){
-    print(patient_name)
+    print(paste(which(patient_names == patient_name),patient_name))
     patient_name_surveys_filepath = paste(data_filepath, patient_name, "survey_timings",sep="/")
     surveys = list.files(patient_name_surveys_filepath)
     for(survey in surveys){
@@ -65,4 +65,5 @@ survey_responsiveness = function(...){
     curated_total[,column] = as.numeric(as.character(curated_total[,column]))
   
   saveRDS(curated_total, paste(output_filepath, "/Processed_Data/Group/survey_responsiveness.rds", sep=""))
-}
+  }
+  
