@@ -11,7 +11,7 @@ output_filepath    = "/storage/xia_mobile/output"
 # Source all files
 source(paste(source_filepath, "Utility/Initialize.R",sep="/"))
 patient_names = list.files(file.path(output_filepath,"Preprocessed_Data","Individual"))
-patient_names = patient_names[31:34]
+patient_names = patient_names[35:40]
 ###################################
 ### individual patient analysis ###
 ###################################
