@@ -3,8 +3,8 @@
 ################################################################
 
 source_filepath    = "~/Documents/GitHub/SmartphoneSensorPipeline/"
-data_filepath      = "/Volumes/Storage/TDSlab/TedSleep/data_v2_beiwe/"
-output_filepath    = "~/Documents/beiwe_output"
+data_filepath      = "/Volumes/Storage/Beiwe/raw_data"
+output_filepath    = "~/Documents/beiwe_output_043020/"
 
 
 
@@ -48,8 +48,8 @@ print("completed!")
 #####################################
 
 
-daily_features()
-fill_in_NAs()
+#daily_features()
+#fill_in_NAs()
 
 
 
