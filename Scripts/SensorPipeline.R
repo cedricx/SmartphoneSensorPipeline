@@ -3,8 +3,8 @@
 ################################################################
 
 source_filepath    = "~/Documents/GitHub/SmartphoneSensorPipeline/"
-data_filepath      = "/Volumes/Storage/Beiwe/raw_data"
-output_filepath    = "~/Documents/beiwe_output_043020/"
+data_filepath      = "~/Documents/xia_gps/data/raw_data"
+output_filepath    = "~/Documents/xia_gps/beiwe_output_043020/"
 
 
 
