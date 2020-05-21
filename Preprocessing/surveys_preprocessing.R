@@ -13,7 +13,6 @@ surveys_preprocessing = function(patient_name, ...){
           date = as.POSIXct(gsub("_",":",gsub(".csv","",specific_survey)),origin="1970-01-01")
           timestamp = as.numeric(date)
           specific_survey_data[,"survey_id"]      = survey_name
-          specific_survey_data["date"]            = date
           specific_survey_data[,"patient_name"]   = patient_name
           specific_survey_data[,"timestamp"]      = timestamp
           specific_survey_data[,"date"]           = as.Date(date)

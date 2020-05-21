@@ -1,0 +1,82 @@
+---
+title: "GPS Footprinting"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+This is the *GPS Footprinting project*. It is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7).
+
+GPS data preprocessing performed according to [Ian Barnett's imputation algorithm](https://github.com/ianjamesbarnett/SmartphoneSensorPipeline), originally published in [Biostatistics (2020)](https://academic.oup.com/biostatistics/article-abstract/21/2/e98/5145908).
+
+### Load Required Packages 
+```{r load_lib, message=FALSE}
+require(ggplot2)
+require(summarytools)
+require(cowplot)
+source('~/Documents/GitHub/SmartphoneSensorPipeline/Extra/plotting_functions.R')
+```
+
+### Setup the paths 
+```{r def_paths}
+project_path = "~/Documents/xia_gps/"
+data_path = file.path(project_path,"beiwe_output_043020")
+
+gps_df_path = file.path(data_path,"Processed_Data/Group/feature_matrix.txt")
+```
+
+### Read in data
+```{r read_gps}
+#colClasses=c('character','character',rep("NULL",94),rep("numeric",15),rep("NULL",16))
+gps_df = read.table(gps_df_path,header = T, dec = ",", )[,c(1,2,97:111)]
+#gps_df = read.csv2(gps_df_path,header = T, sep= "", na.strings ="",colClasses= colClasses)
+head(gps_df)
+```
+
+The current data has `r length(unique(gps_df$IID))` subjects, consisting of `r dim(gps_df)[1]` total days, and `r length(colnames(gps_df))-2` GPS features.
+
+```{r fig.width=10, fig.height=4, echo=FALSE}
+minMiss_histplot(gps_df,200, "All Data")
+```
+
+
+```{r define_col_types}
+#Define the column types
+gps_df$Date = as.Date(gps_df$Date)
+gps_df[,3:dim(gps_df)[2]] = apply(gps_df[,3:dim(gps_df)[2]], 2, function(x) as.numeric(x))
+```
+
+
+### Exclude Data
+#### 1.  remove 1st and last days
+```{r 1st_last_days}
+# loop through each subj to remove 1st and last days of gps data
+gps_df_clean = data.frame() #initiate a df
+for (subj in unique(gps_df$IID)){ #loop through each subj
+  gps_df_subj <- subset(gps_df, IID == subj) #get gps_df per subject
+  gps_df_subj <- gps_df_subj[2:(dim(gps_df_subj)[1]-1),] #remove the 1st and last days
+  gps_df_clean <- rbind(gps_df_clean,gps_df_subj) #combine all subjs
+}
+```
+
+This step removed `r dim(gps_df)[1] - dim(gps_df_clean)[1]` days. Now, dataset has `r length(unique(gps_df_clean$IID))` subjects, consisting of `r dim(gps_df_clean)[1]` total days, and `r length(colnames(gps_df_clean))-2` GPS features.
+
+```{r fig.width=10, fig.height=4, echo=FALSE}
+minMiss_histplot(gps_df_clean,200, "After Removing 1st and Last Days")
+```
+
+#### 2.  remove days with all mins missing
+```{r results='asis'}
+gps_df_clean2 = subset(gps_df_clean, MinsMissing < 1440)
+```
+
+This step removed `r dim(gps_df_clean)[1] - dim(gps_df_clean2)[1]` days. Now, dataset has `r length(unique(gps_df_clean2$IID))` subjects, consisting of `r dim(gps_df_clean2)[1]` total days, and `r length(colnames(gps_df_clean2))-2` GPS features.
+
+```{r fig.width=10, fig.height=4, echo=FALSE}
+minMiss_histplot(gps_df_clean2,200, "After Removing All-Day-Missing ")
+```
+
+```{r fig.width=10, fig.height=4, echo=FALSE}
+minMiss_histplot(subset(gps_df_clean2,MinsMissing>=1296),200, "Zoom In 1296-1440")
+```
