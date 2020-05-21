@@ -2,8 +2,7 @@
 title: "GPS Footprinting"
 output:
   pdf_document: default
-  html_document:
-    df_print: paged
+  rmarkdown::github_document
 ---
 
 This is the *GPS Footprinting project*. It is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7).
