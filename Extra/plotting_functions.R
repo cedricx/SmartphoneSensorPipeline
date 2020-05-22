@@ -121,5 +121,14 @@ rquery.cormat <-function(x, type=c('lower', 'upper', 'full', 'flatten'),
 }
 
 
-
+### nice histogram ##
+hist_chx = function(vector, bins=30, title="",xaxis="",yaxis="", fill="lightgrey"){
+  df = data.frame(val = vector)
+  ggplot(df, aes(x=val)) + 
+    geom_histogram(bins = bins, fill = fill) + 
+    theme_cowplot() +
+    labs(title=title,
+         x =xaxis, y = yaxis) + 
+    theme(plot.title = element_text(hjust = 0.5))
+}
 

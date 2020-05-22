@@ -2,12 +2,20 @@
 title: "GPS Footprinting"
 output: html_notebook
 ---
+Cedric Huchuan Xia
 
-This is the *GPS Footprinting project*. It is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7).
+`r Sys.Date()`
 
-GPS data preprocessing performed according to [Ian Barnett's imputation algorithm](https://github.com/ianjamesbarnett/SmartphoneSensorPipeline), originally published in [Biostatistics (2020)](https://academic.oup.com/biostatistics/article-abstract/21/2/e98/5145908).
+[email](hxia@upenn.edu)
+[github](https://github.com/cedricx/)
 
-### Load Required Packages 
+Penn Lifespan Informatics and Neuroimaging Center ([PennLINC](pennlinc.io)) 
+
+This is the *GPS Footprinting project*, inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7).
+
+GPS data preprocessing was performed according to [Ian Barnett's imputation algorithm](https://github.com/ianjamesbarnett/SmartphoneSensorPipeline), originally published in [Biostatistics (2020)](https://academic.oup.com/biostatistics/article-abstract/21/2/e98/5145908).
+
+### 1. Load Required Packages 
 ```{r load_lib, message=FALSE}
 require(ggplot2)
 require(summarytools)
@@ -15,18 +23,36 @@ require(cowplot)
 require(caret)
 require(corrplot)
 require(RColorBrewer)
+require(vembedr)
+require(Rmisc)
 source('~/Documents/GitHub/SmartphoneSensorPipeline/Extra/plotting_functions.R')
 ```
 
-### Setup the paths 
+### 2. Setup the paths 
 ```{r def_paths}
 project_path = "~/Documents/xia_gps/"
 data_path = file.path(project_path,"beiwe_output_043020")
-
 gps_df_path = file.path(data_path,"Processed_Data/Group/feature_matrix.txt")
 ```
 
-### Read in data
+### 3. Read in data
+The current data has `r length(unique(gps_df$IID))` subjects, consisting of `r dim(gps_df)[1]` total days, and `r length(colnames(gps_df))-2` GPS features. To conserve battery life, a subject's GPS coordinates were tracked for in a 2-min-on and 18-min-off cycle everyday using their own mobile device via the [Beiwe platform](https://www.beiwe.org). We used [Ian Barnett's algorithm](https://github.com/ianjamesbarnett/SmartphoneSensorPipeline) to impute the missing data in between the on cycles. Assuming no more data was missing due to various factors, one would generate `r 2*3*24` mins of GPS data per day, or `r 2/20*100`% of total minutes in a day. 
+
+As you can see from the figure below, an individuals' mobility trajectory can nicely reconstructed from these data.
+
+![gps_track](./gps_track_sample.png)
+**Figure 1: A weekly view of a subject's mobility pattern**
+
+For an even more intuitive view of the GPS data, take a look at the video here:
+
+```{r echo=FALSE}
+embed_url("https://youtu.be/KobESgtfoOo")
+```
+
+
+From these GPS traces, we extracted daily mobility features, such as *max home distance*, *circadian routine*, *probability of pauses*, as described in the [Barnett et al., Biostatistics (2020)](https://academic.oup.com/biostatistics/article-abstract/21/2/e98/5145908) and defined mathematically in its [supplementary material](shorturl.at/dluBV).
+
+To get a flavor of what these features look like, the first six days of GPS data for a subject is attached below. 
 ```{r read_gps}
 gps_df = read.table(gps_df_path,header = T, dec = ",", )[,c(1,2,97:111)]
 
@@ -37,21 +63,20 @@ head(gps_df)
 
 ```
 
-The current data has `r length(unique(gps_df$IID))` subjects, consisting of `r dim(gps_df)[1]` total days, and `r length(colnames(gps_df))-2` GPS features.
-
-
-
+### 4. Exclude Data
+The first step before further analysis is to exclude data points (days) that had excessive amount of data missing. Here is visualization of the minutes missing for all `r dim(gps_df)[1]` total days. 
 
 ```{r fig.width=10, fig.height=4, echo=FALSE}
 minMiss_histplot(gps_df,200, "All Data")
 ```
+**Figure 2: Minutes missing for all collected days.** There are `r dim(gps_df)[1]` total days. Dashlines indicate the corresponding percentile.
 
 
 
 
+#### 4a.  remove first and last days
+First, we will remove the first and last days from each subject, because the application was installed during mid-day at the beginning of the study and uninstalled mid-day at the end of the study. 
 
-### Exclude Data
-#### 1.  remove 1st and last days
 ```{r 1st_last_days}
 # loop through each subj to remove 1st and last days of gps data
 gps_df_clean = data.frame() #initiate a df
@@ -67,8 +92,11 @@ This step removed `r dim(gps_df)[1] - dim(gps_df_clean)[1]` days. Now, dataset h
 ```{r fig.width=10, fig.height=4, echo=FALSE}
 minMiss_histplot(gps_df_clean,200, "After Removing 1st and Last Days")
 ```
+**Figure 3: Minutes missing after removing the first and last days of each subject.** There are `r dim(gps_df_clean)[1]` total days. Dashlines indicate the corresponding percentile.
 
-#### 2.  remove days at the sensitivity threshold
+#### 4b.  remove days at the sensitivity threshold
+Next, we are removing the days with excessive data missingness. This is of course an arbitrary step. Therefore we will conduct a sensitivity analysis of the missingness threshold we set by performing the analysis across multiple different thresholds. For now, the current sensitivity cutoff is set at `r sensitivity_cutoff`, which amounts to only excluding those with `r sensitivity_cutoff/1440*100`% of GPS missing.
+
 ```{r results='asis'}
 sensitivity_cutoff = 1440 # this controls the cutoff threshold
 gps_df_clean2 = subset(gps_df_clean, MinsMissing < sensitivity_cutoff)
@@ -79,31 +107,50 @@ This step removed `r dim(gps_df_clean)[1] - dim(gps_df_clean2)[1]` days. Now, da
 ```{r fig.width=10, fig.height=4, echo=FALSE}
 minMiss_histplot(gps_df_clean2,200, paste("After Removing Missing Greater than ",sensitivity_cutoff))
 ```
+**Figure 4: Minutes missing after removing days with all data missing.** There are `r dim(gps_df_clean2)[1]` total days. Dashlines indicate the corresponding percentile.
+
 
 ```{r fig.width=10, fig.height=4, echo=FALSE}
 minMiss_histplot(subset(gps_df_clean2,MinsMissing>=1296),200, "Zoom In Plot")
 ```
+**Figure 5: A Zoom-in plot of minutes missing distribution after removing days with all data missing.** There are `r dim(gps_df_clean2)[1]` total days. Dashlines indicate the corresponding percentile.
 
-#### 4. Randomly Select Half of Days for Each Subject
+#### 5. Randomly Select Half of Days for Each Subject
+
+To operationalize individual footprinting prediction, we randomly split each individual's available GPS data to two half partitions for `r part_times` times. We used the features from the first half to determine if we can identify the same individual using their data in the second unseen half. Again, to avoid any (un)lucky random splits, we repeated data partition `r part_times` times.
+
 ```{r}
 set.seed(510)
-subj_seq = list()
-part_times = 10
-for (subj in unique(gps_df_clean2$IID)){
-  subj_data = subset(gps_df_clean2, IID==subj)
-  subj_seq[[subj]] <-createDataPartition(subj_data$IID,times = part_times, p =0.5)
+make_subj_seq = function(gps_df_clean2,part_times = 10) {
+  subj_seq = list()
+  for (subj in unique(gps_df_clean2$IID)){
+    subj_data = subset(gps_df_clean2, IID==subj)
+    subj_seq[[subj]] <-createDataPartition(subj_data$IID,times = part_times, p =0.5)
+  }
+  return(subj_seq)
 }
+subj_seq = make_subj_seq(gps_df_clean2, 100)
+
 ```
+
+
 
 ### 5. Build Correlation Matrix
+
+Here, similar to [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7), we built a Pearson correlation matrix among `r length(colnames(gps_df_clean2))-2` available GPS features. Below is an illustrative sample of the variables and their correlations.
+
 ```{r example_cor_fig, fig.width=3, fig.width=3, fig.align="center"}
 # an example of subj 1, and first half
-cormat = cor(gps_df_clean2[subj_seq$`14w5qlo8`$Resample01,3:17])
-gps_cor = rquery.cormat(cormat, type = "full")
+example_data = gps_df_clean2[subj_seq$`14w5qlo8`$Resample001,3:17]
+gps_cor = rquery.cormat(example_data, type = "full")
 ```
+**Figure 6: Correlation matrix of GPS features for a subject.**
+
+
+We then calculated the feature matrix for all `r length(unique(gps_df_clean2$IID))` subjects in the dataset, seperately for each half data partition, and for each random split. 
 
 ```{r create feature matrix for everyone, warning=FALSE}
-make_feature_matrix = function(gps_df) {
+make_feature_matrix = function(gps_df, subj_seq) {
   subj_mat_1 = list()
   subj_mat_2 = list()
   for (subj in unique(gps_df$IID)){
@@ -116,7 +163,10 @@ make_feature_matrix = function(gps_df) {
 
 gps_clean2_feature = make_feature_matrix(gps_df_clean2)
 ```
+
 #### 6. Match Target to Database
+
+Next we tried to match each target, defined by one subject's feature matrix in the first half, to a feature matrix in the second half in the same random split. If the same individual's feature matrix in the second half had the highest correlation among all subjects, then we assigned the match result 1, indicating a succussful match, otherwise 0, indicating an unsccussful match.
 
 ```{r calc match cor}
 # creating a "database" against which target is to be matched with
@@ -124,6 +174,7 @@ subj_mat_1 = gps_clean2_feature$subj_mat_1
 subj_mat_2 = gps_clean2_feature$subj_mat_2
 
 calc_match_cor = function(subj_mat_1,subj_mat_2) {
+  part_times = length(subj_mat_1[[1]])
   database = list() 
   for (time in 1:part_times) {
       database[[time]] = lapply(subj_mat_2, function(subjmat) subjmat[[time]]$cor)
@@ -150,8 +201,11 @@ match_cor = calc_match_cor(subj_mat_1,subj_mat_2)
 
 ```
 
+
+By tallying up all the successful and unsuccessful matchs in each of the `r part_times` random splits, we calculated a distribution of match accuracy.
+
 ```{r calc accuracy by partition}
-calc_acc_time=function(match_cor) {
+calc_acc_time=function(match_cor,part_times) {
   acc_time = array()
   for (time in 1:part_times){
     acc_time[time] = 0
@@ -166,16 +220,20 @@ calc_acc_time=function(match_cor) {
   acc_time = acc_time/length(names(subj_mat_1))
   return(acc_time)
 }
-acc_time = calc_acc_time(match_cor)
+acc_time = calc_acc_time(match_cor,part_times)
 ```
 
+Over the `r part_times` random splits, the mean match accuracy was `r round(mean(acc_time),4)*100`%, with a standard deviation of `r round(sd(acc_time),4)*100`%, high of `r round(max(acc_time),4)*100`%, and low of `r round(min(acc_time),4)*100`%, (95%CI: `r round(CI(acc_time)['lower'],2)`-`r round(CI(acc_time)['upper'],2)`).
+
 ```{r plot accuracy by partition histogram }
-print(hist(acc_time))
+hist_chx(acc_time, bins = 15, title = paste("Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+
 ```
+**Figure 7: Match accuracy distributon across `r part_times` data splits.** Mean match accuracy was `r round(CI(acc_time)['mean'],2)` (95%CI: `r round(CI(acc_time)['lower'],2)`-`r round(CI(acc_time)['upper'],2)`)
 
 
 ```{r calc accuracy by subj}
-calc_acc_subj = function(match_cor){
+calc_acc_subj = function(match_cor, part_times){
   acc_subj = array()
   for (subj in names(subj_mat_1)){
     acc_subj[subj] = 0
@@ -187,34 +245,88 @@ calc_acc_subj = function(match_cor){
       }
     }
   }
-  acc_subj_ave = acc_subj/part_times
-  return(acc_subj_ave)
+  acc_subj = acc_subj/part_times
+  acc_subj = acc_subj[-1]
+  return(acc_subj)
 }
-acc_subj_ave = calc_acc_subj(match_cor)
+acc_subj = calc_acc_subj(match_cor, part_times)
 ```
 
+
+In addition to the match accuracy across subjects, we also calculated the match accuracy for each individual. Across the `r length(unique(gps_df_clean2$IID))` subjects, the mean match accuracy was `r round(mean(subj_df$y),4)*100`%, with a standard deviation of `r round(sd(subj_df$y),4)*100`%, high of `r round(max(subj_df$y),4)*100`%, and low of `r round(min(subj_df$y),4)*100`%.
+
 ```{r plot accuracy by subjects}
-print(plot(acc_subj))
+subj_df <- data.frame(x=unique(gps_df_clean2$IID))
+subj_df$y = acc_subj
+subj_df = subj_df[order(subj_df$y),]
+subj_acc_plot = ggplot(subj_df) + 
+  geom_point(aes(x = reorder(x, y), y = y)) + 
+  theme_cowplot() + 
+  labs(title = paste("Subject Level Accuracy Across",part_times,"Data Partitions"), 
+       x = "Subjects", y = "Prediction Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+subj_acc_plot
 ```
+**Figure 8: Match accuracy distributon across `r length(unique(gps_df_clean2$IID))` subjects.** Mean match accuracy was `r round(mean(subj_df$y),4)*100`%, with a standard deviation of `r round(sd(subj_df$y),4)*100`%, high of `r round(max(subj_df$y),4)*100`%, and low of `r round(min(subj_df$y),4)*100`%. This shows dramatic differences in individual *footprinting distinctiveness*.
 
 
 #### 7. Permutation Test
-```{r warning=FALSE}
+
+To assess the statistical significance of the results above, we conducted a non-parametric permutation test. To do this, we randomly scrambled pair-wise subject-to-day linkage. We repeated this process `r perm_time` times, and followed the same procedure as above to obtain a null distribution of average match accuracy across sample, and for each individual.
+
+```{r calc permutation accuracy, echo=TRUE, message=FALSE, warning=FALSE}
 gps_df_perm = gps_df_clean2
 perm_time = 1000
 perm_acc_time = list()
 perm_acc_subj = list()
 for (i in 1:perm_time) {
+  perm_part_times = 1
   print(paste("processing ...", i,"..."))
   gps_df_perm$IID = sample(gps_df_perm$IID)
-  perm_gps = make_feature_matrix(gps_df_perm)
+  perm_subj_seq = make_subj_seq(gps_df_perm,part_times = perm_part_times)
+  perm_gps = make_feature_matrix(gps_df_perm,perm_subj_seq)
   perm_mat_1 = perm_gps$subj_mat_1
   perm_mat_2 = perm_gps$subj_mat_2
   perm_match_cor = calc_match_cor(perm_mat_1,perm_mat_2)
-  perm_acc_time[[i]] = calc_acc_time(perm_match_cor)
-  perm_acc_subj[[i]] = calc_acc_subj(perm_match_cor)
+  perm_acc_time[[i]] = calc_acc_time(perm_match_cor,part_times = perm_part_times)
+  perm_acc_subj[[i]] = calc_acc_subj(perm_match_cor,part_times = perm_part_times)
 }
+```
 
+
+Over the `r perm_time` permutations, the mean match accuracy was `r round(mean(perm_acc_time_all),4)*100`%, with a standard deviation of `r round(sd(perm_acc_time_all),4)*100`%, high of `r max(mean(perm_acc_time_all),4)*100`%, and low of `r min(mean(perm_acc_time_all),4)*100`%.(95%CI: `r round(CI(perm_acc_time_all)['lower'],2)`-`r round(CI(perm_acc_time_all)['upper'],2)`)
+
+```{r combine partition permutation results}
+perm_acc_time_all = unlist(perm_acc_time)
+hist_chx(perm_acc_time_all, bins = 8, title = paste("Average Accuracy Across",length(perm_acc_time_all),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
+```
+**Figure 9: Match accuracy distributon across `r perm_time` permutations.** Mean match accuracy in permutation was `r round(CI(perm_acc_time_all)['mean'],2)` (95%CI: `r round(CI(perm_acc_time_all)['lower'],2)`-`r round(CI(perm_acc_time_all)['upper'],2)`). This null distribution does not overlapp with the distributon using real data (**Fig.7**) at all.
+
+
+We also calculated null distribution of match accuracy for each subject. Over the `r perm_time` permutations, the mean match accuracy was `r round(mean(subj_df$y_perm),4)*100`%, with a standard deviation of `r round(sd(subj_df$y_perm),4)*100`%, high of `r round(max(subj_df$y_perm),4)*100`%, and low of `r round(min(subj_df$y_perm),4)*100`%.
+
+```{r combine subj permutation analysis}
+perm_subj = list()
+for (subj in subj_acc_plot$data$x) {
+  perm_subj$val[[subj]] = sapply(perm_acc_subj, function(perm) perm[which(names(perm) == subj)])
+  perm_subj$hist[[subj]] = hist_chx(perm_subj[[subj]]$val, bins = 8, title = paste(subj,": Accuracy Across \n",perm_time,"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
+  perm_subj$acc[[subj]] = sum(perm_subj$val[[subj]])/perm_time
+}
+```
+
+```{r plot subj analysis with perm}
+subj_df <- data.frame(x=unique(gps_df_clean2$IID))
+subj_df$y = acc_subj
+subj_df$y_perm = unlist(perm_subj$acc)
+subj_df = subj_df[order(subj_df$y),]
+ggplot(subj_df, aes(x = reorder(x, y), y = value)) + 
+  geom_point(aes(y = y, col = "subject data")) + 
+  geom_point(aes(y = y_perm, col = "permutation")) +
+  theme_cowplot() + 
+  labs(title = paste("Subject Level Accuracy Across",part_times,"Data Partitions"), 
+       x = "Subjects", y = "Prediction Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
 
 ```
+**Figure 8: Match accuracy null distributon across `r length(unique(gps_df_clean2$IID))` subjects.** Mean match accuracy in permutation was `r round(mean(subj_df$y_perm),4)*100`%, with a standard deviation of `r round(sd(subj_df$y_perm),4)*100`%, high of `r round(max(subj_df$y_perm),4)*100`%, and low of `r round(min(subj_df$y_perm),4)*100`%. While individuals exhibited marked differences in footprinting distinctivenss, the subject with the lowest prediction accuracy was still statistically significant against the permutation test (i.e. for subject `r subj_df$x[1]`: data: `r round(min(subj_df$y),4)*100` % vs. permutation: `r round(min(subj_df$y_perm),4)*100`%).
 
