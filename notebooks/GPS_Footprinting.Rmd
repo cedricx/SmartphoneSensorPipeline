@@ -1,9 +1,8 @@
 ---
 title: "GPS Footprinting"
 output:
-  pdf_document: default
   html_document:
-    keep_md: true
+    df_print: paged
 ---
 
 This is the *GPS Footprinting project*. It is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7).
@@ -15,6 +14,7 @@ GPS data preprocessing performed according to [Ian Barnett's imputation algorith
 require(ggplot2)
 require(summarytools)
 require(cowplot)
+require(caret)
 source('~/Documents/GitHub/SmartphoneSensorPipeline/Extra/plotting_functions.R')
 ```
 
@@ -28,24 +28,26 @@ gps_df_path = file.path(data_path,"Processed_Data/Group/feature_matrix.txt")
 
 ### Read in data
 ```{r read_gps}
-#colClasses=c('character','character',rep("NULL",94),rep("numeric",15),rep("NULL",16))
 gps_df = read.table(gps_df_path,header = T, dec = ",", )[,c(1,2,97:111)]
-#gps_df = read.csv2(gps_df_path,header = T, sep= "", na.strings ="",colClasses= colClasses)
+
+#Define the column types
+gps_df$Date = as.Date(gps_df$Date)
+gps_df[,3:dim(gps_df)[2]] = apply(gps_df[,3:dim(gps_df)[2]], 2, function(x) as.numeric(x))
 head(gps_df)
+
 ```
 
 The current data has `r length(unique(gps_df$IID))` subjects, consisting of `r dim(gps_df)[1]` total days, and `r length(colnames(gps_df))-2` GPS features.
+
+
+
 
 ```{r fig.width=10, fig.height=4, echo=FALSE}
 minMiss_histplot(gps_df,200, "All Data")
 ```
 
 
-```{r define_col_types}
-#Define the column types
-gps_df$Date = as.Date(gps_df$Date)
-gps_df[,3:dim(gps_df)[2]] = apply(gps_df[,3:dim(gps_df)[2]], 2, function(x) as.numeric(x))
-```
+
 
 
 ### Exclude Data
@@ -66,17 +68,29 @@ This step removed `r dim(gps_df)[1] - dim(gps_df_clean)[1]` days. Now, dataset h
 minMiss_histplot(gps_df_clean,200, "After Removing 1st and Last Days")
 ```
 
-#### 2.  remove days with all mins missing
+#### 2.  remove days at the sensitivity threshold
 ```{r results='asis'}
-gps_df_clean2 = subset(gps_df_clean, MinsMissing < 1440)
+sensitivity_cutoff = 1440 # this controls the cutoff threshold
+gps_df_clean2 = subset(gps_df_clean, MinsMissing < sensitivity_cutoff)
 ```
 
 This step removed `r dim(gps_df_clean)[1] - dim(gps_df_clean2)[1]` days. Now, dataset has `r length(unique(gps_df_clean2$IID))` subjects, consisting of `r dim(gps_df_clean2)[1]` total days, and `r length(colnames(gps_df_clean2))-2` GPS features.
 
 ```{r fig.width=10, fig.height=4, echo=FALSE}
-minMiss_histplot(gps_df_clean2,200, "After Removing All-Day-Missing ")
+minMiss_histplot(gps_df_clean2,200, paste("After Removing Missing Greater than ",sensitivity_cutoff))
 ```
 
 ```{r fig.width=10, fig.height=4, echo=FALSE}
-minMiss_histplot(subset(gps_df_clean2,MinsMissing>=1296),200, "Zoom In 1296-1440")
+minMiss_histplot(subset(gps_df_clean2,MinsMissing>=1296),200, "Zoom In Plot")
 ```
+
+#### 4. Randomly Select Half of Days for Each Subject
+```{r}
+gps_half1 = data.frame()
+gps_half2 = data.frame()
+for (subj in unique(gps_df_clean2$IID)){
+  
+}
+```
+
+

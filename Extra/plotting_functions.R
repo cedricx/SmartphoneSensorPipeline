@@ -9,7 +9,7 @@ minMiss_histplot<-function(data, bins, title="", tag ="", percent = T){
     
   } else {
     mean = round(mean(data$MinsMissing),0)
-    percents = round(quantile(data$MinsMissing,prob = c(0.75, 0.8, 0.85, 0.9)),0)
+    percents = round(quantile(data$MinsMissing,prob = c(0.75, 0.8, 0.85, 0.9), na.rm=TRUE),0)
     num_percent = sapply(percents, FUN = function(percent) length(which(data$MinsMissing <= percent)))
     legends = c()
     for (i in 1:length(percents)){
