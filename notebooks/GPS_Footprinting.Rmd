@@ -1,8 +1,6 @@
 ---
 title: "GPS Footprinting"
-output:
-  html_document:
-    df_print: paged
+output: html_notebook
 ---
 
 This is the *GPS Footprinting project*. It is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7).
@@ -15,6 +13,8 @@ require(ggplot2)
 require(summarytools)
 require(cowplot)
 require(caret)
+require(corrplot)
+require(RColorBrewer)
 source('~/Documents/GitHub/SmartphoneSensorPipeline/Extra/plotting_functions.R')
 ```
 
@@ -86,11 +86,135 @@ minMiss_histplot(subset(gps_df_clean2,MinsMissing>=1296),200, "Zoom In Plot")
 
 #### 4. Randomly Select Half of Days for Each Subject
 ```{r}
-gps_half1 = data.frame()
-gps_half2 = data.frame()
+set.seed(510)
+subj_seq = list()
+part_times = 10
 for (subj in unique(gps_df_clean2$IID)){
-  
+  subj_data = subset(gps_df_clean2, IID==subj)
+  subj_seq[[subj]] <-createDataPartition(subj_data$IID,times = part_times, p =0.5)
 }
 ```
 
+### 5. Build Correlation Matrix
+```{r example_cor_fig, fig.width=3, fig.width=3, fig.align="center"}
+# an example of subj 1, and first half
+cormat = cor(gps_df_clean2[subj_seq$`14w5qlo8`$Resample01,3:17])
+gps_cor = rquery.cormat(cormat, type = "full")
+```
+
+```{r create feature matrix for everyone, warning=FALSE}
+make_feature_matrix = function(gps_df) {
+  subj_mat_1 = list()
+  subj_mat_2 = list()
+  for (subj in unique(gps_df$IID)){
+    subj_data = subset(gps_df_clean2, IID==subj)
+    subj_mat_1[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[list,3:17], type = "flatten", graph = F)$r)
+    subj_mat_2[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[-list,3:17], type = "flatten", graph = F)$r)
+  }
+  return(list(subj_mat_1 = subj_mat_1, subj_mat_2 = subj_mat_2 ))
+}
+
+gps_clean2_feature = make_feature_matrix(gps_df_clean2)
+```
+#### 6. Match Target to Database
+
+```{r calc match cor}
+# creating a "database" against which target is to be matched with
+subj_mat_1 = gps_clean2_feature$subj_mat_1
+subj_mat_2 = gps_clean2_feature$subj_mat_2
+
+calc_match_cor = function(subj_mat_1,subj_mat_2) {
+  database = list() 
+  for (time in 1:part_times) {
+      database[[time]] = lapply(subj_mat_2, function(subjmat) subjmat[[time]]$cor)
+  }
+  
+    # match target to database
+    match_cor = list()
+    for (subj1 in names(subj_mat_1)){ #loop through each subj
+      # create a list of target across partitions
+      target_list = lapply(subj_mat_1[[subj1]], function(part) part$cor)
+      # create a match list
+      for (time in 1:part_times){
+        target_subj_time = target_list[[time]] #loop through each partition
+        for (subj2 in names(subj_mat_2)){ #loop everyone in 2nd half
+          data_subj_time = subj_mat_2[[subj2]][[time]]$cor
+          match_cor[[subj1]][[as.character(time)]][[subj2]] = cor(target_subj_time,data_subj_time,use = "na.or.complete")
+        }
+      }
+    }
+  return(match_cor)
+}
+
+match_cor = calc_match_cor(subj_mat_1,subj_mat_2)
+
+```
+
+```{r calc accuracy by partition}
+calc_acc_time=function(match_cor) {
+  acc_time = array()
+  for (time in 1:part_times){
+    acc_time[time] = 0
+    for (subj in names(subj_mat_1)){
+      max_position = which.max(unlist(match_cor[[subj]][[as.character(time)]]))
+      predicted_subj = names(subj_mat_1)[max_position]
+      if (predicted_subj == subj) {
+        acc_time[time] = acc_time[time] + 1
+      }
+    }
+  }
+  acc_time = acc_time/length(names(subj_mat_1))
+  return(acc_time)
+}
+acc_time = calc_acc_time(match_cor)
+```
+
+```{r plot accuracy by partition histogram }
+print(hist(acc_time))
+```
+
+
+```{r calc accuracy by subj}
+calc_acc_subj = function(match_cor){
+  acc_subj = array()
+  for (subj in names(subj_mat_1)){
+    acc_subj[subj] = 0
+    for (time in 1:part_times){
+      max_position = which.max(unlist(match_cor[[subj]][[as.character(time)]]))
+      predicted_subj = names(subj_mat_1)[max_position]
+      if (predicted_subj == subj) {
+        acc_subj[subj] = acc_subj[subj] + 1
+      }
+    }
+  }
+  acc_subj_ave = acc_subj/part_times
+  return(acc_subj_ave)
+}
+acc_subj_ave = calc_acc_subj(match_cor)
+```
+
+```{r plot accuracy by subjects}
+print(plot(acc_subj))
+```
+
+
+#### 7. Permutation Test
+```{r warning=FALSE}
+gps_df_perm = gps_df_clean2
+perm_time = 1000
+perm_acc_time = list()
+perm_acc_subj = list()
+for (i in 1:perm_time) {
+  print(paste("processing ...", i,"..."))
+  gps_df_perm$IID = sample(gps_df_perm$IID)
+  perm_gps = make_feature_matrix(gps_df_perm)
+  perm_mat_1 = perm_gps$subj_mat_1
+  perm_mat_2 = perm_gps$subj_mat_2
+  perm_match_cor = calc_match_cor(perm_mat_1,perm_mat_2)
+  perm_acc_time[[i]] = calc_acc_time(perm_match_cor)
+  perm_acc_subj[[i]] = calc_acc_subj(perm_match_cor)
+}
+
+
+```
 
