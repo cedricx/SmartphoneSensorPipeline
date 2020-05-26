@@ -132,3 +132,9 @@ hist_chx = function(vector, bins=30, title="",xaxis="",yaxis="", fill="lightgrey
     theme(plot.title = element_text(hjust = 0.5))
 }
 
+### nice scatterplot ###
+scatter_chx = function(vector){
+  df = data.frame(val = vector)
+  ggplot(df, aes(x=val)) + 
+    gemo
+}
