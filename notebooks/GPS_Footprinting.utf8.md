@@ -16,7 +16,7 @@ output:
 editor_options: 
   chunk_output_type: inline
 ---
-2020-05-26 19:51:33
+2020-05-26 19:52:01
 
 Author: [Cedric Huchuan Xia](https://www.pennlinc.io/team/Cedric-Huchuan-Xia) ([email](hxia@upenn.edu), [github](https://github.com/cedricx/))
 
@@ -105,7 +105,7 @@ For an even more intuitive view of the GPS data, take a look at the video here:
 
 <!-- rnb-chunk-begin -->
 
-preserve05039f57ff4a42b4
+preserved7b9d8713c712554
 
 <!-- rnb-chunk-end -->
 
@@ -182,7 +182,7 @@ ggplotly(p)
 ```
 
 <!-- rnb-source-end -->
-preserve55a36be4d5e7c4fd
+preservee5a6c5ea5154fcba
 
 <!-- rnb-chunk-end -->
 
@@ -246,7 +246,7 @@ Warning messages:
 
 
 <!-- rnb-output-end -->
-preserve1fbaed698b7badc3
+preserve95a690c3a42ef3e3
 
 <!-- rnb-chunk-end -->
 
@@ -302,7 +302,7 @@ Warning messages:
 
 
 <!-- rnb-output-end -->
-preserveb37519a5c6c6f8bd
+preservec74671dd2989f550
 
 <!-- rnb-chunk-end -->
 
@@ -332,7 +332,7 @@ Warning messages:
 
 
 <!-- rnb-output-end -->
-preserve8395411f3d2ba2a3
+preserveb24f7377d4ad5fd0
 
 <!-- rnb-chunk-end -->
 
@@ -574,7 +574,7 @@ ggplotly(p_time_cor)
 ```
 
 <!-- rnb-source-end -->
-preserve14a211b3d03879d4
+preserveb33709805c238e18
 
 <!-- rnb-chunk-end -->
 
@@ -651,7 +651,7 @@ ggplotly(subj_scatter(gps_df_clean2,acc_subj, "Correlated"))
 ```
 
 <!-- rnb-source-end -->
-preserve6cb2b529e34a69f9
+preserve272eab136890551b
 
 <!-- rnb-chunk-end -->
 
@@ -720,7 +720,7 @@ ggplotly(q_time_cor)
 ```
 
 <!-- rnb-source-end -->
-preserve22bc801ebabe682b
+preserve07683fcb1ca85b13
 
 <!-- rnb-chunk-end -->
 
@@ -783,7 +783,7 @@ ggplotly(p_subj_cor_perm)
 ```
 
 <!-- rnb-source-end -->
-preserve4cd8365342cb3d4a
+preservea56886066b87a67d
 
 <!-- rnb-chunk-end -->
 
@@ -1162,7 +1162,7 @@ ggplotly(p_subj_mean_perm)
 ```
 
 <!-- rnb-source-end -->
-preserve8009223647375431
+preserve2f5661d3e36173c8
 
 <!-- rnb-chunk-end -->
 
@@ -1187,7 +1187,7 @@ ggplotly(p_subj_rmssd_perm)
 ```
 
 <!-- rnb-source-end -->
-preserveccf5901bcc3a9e4b
+preservea4250b56507e6eb8
 
 <!-- rnb-chunk-end -->
 
