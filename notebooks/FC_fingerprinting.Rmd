@@ -1,0 +1,112 @@
+---
+title: "Functional Connectivity Fingerprinting"
+output:
+  html_notebook:
+    includes:
+      after_body: footer.html
+    toc: yes
+    toc_float:
+      toc_collapsed: yes
+---
+`r Sys.time()`
+
+Author: [Cedric Huchuan Xia](https://www.pennlinc.io/team/Cedric-Huchuan-Xia) ([email](hxia@upenn.edu), [github](https://github.com/cedricx/))
+
+Affiliation: Penn Lifespan Informatics and Neuroimaging Center ([PennLINC](pennlinc.io)) 
+
+***
+
+```{r load libraries, message=FALSE}
+require(reshape2)
+require(sna)
+```
+
+```{r define paths}
+project_path = "~/Documents/xia_gps/"
+data_path = file.path(project_path,"data/flywheel_data/network/")
+```
+
+
+```{r}
+subjects = list.files(data_path)
+atlas = "power264"
+subj_net_files_1 = list()
+subj_net_files_2 = list()
+
+for (subj in subjects) {
+  subj_files = list.files(file.path(data_path,subj))
+  net_pattern_1 = paste0("*",subj,"*task-rest*","*single*",atlas,"*")
+  net_pattern_2 = paste0("*",subj,"*task-rest*","*multi*",atlas,"*")
+  
+  file_path_1 = file.path(data_path, subj,subj_files[grep(glob2rx(net_pattern_1),subj_files)])
+  file_path_2 = file.path(data_path, subj,subj_files[grep(glob2rx(net_pattern_2),subj_files)])
+  
+  if (length(file_path_1)>0) {subj_net_files_1[[subj]] = read.table(file_path_1) }
+  if (length(file_path_2)>0) {subj_net_files_2[[subj]] = read.table(file_path_2) }
+}
+```
+
+
+```{r}
+
+get_acc_finger = function(subj_net_files_1,subj_net_files_2){
+    cor_match = list()
+    cor_match = lapply(subj_net_files_1, function(subj_cor_1) sapply(subj_net_files_2, function(subj_cor_2) cor(subj_cor_1, subj_cor_2, use = "na.or.complete")))
+    
+    acc = 0
+    cor_list = array()
+    for(subj in names(cor_match)) {
+       position = which.max(unlist(cor_match[[subj]]))
+       cor_list[[subj]] = max(unlist(cor_match[[subj]]))
+       predicted_subj = subjects[position]
+       if (predicted_subj == subj) {
+            acc= acc + 1
+          }
+    }
+    
+    cor_list = cor_list[-1]
+    cor_df = data.frame(bblid = as.numeric(names(cor_list)), finger = unlist(cor_list))
+    acc = acc/length(cor_match)
+    
+    return(cor_df)
+  }
+
+task_rest_acc = get_acc_finger(subj_net_files_1,subj_net_files_2)
+single_multi_acc = get_acc_finger(subj_net_files_1,subj_net_files_2)
+
+psych_sum_finger = inner_join(cor_df,psych_sum, by = c('bblid' = 'BBLID'))
+
+fit = lm( acc ~ finger +  sum_als + days, data = psych_sum_finger)
+summary(fit)
+```
+
+
+
+```{r }
+matrix_fc = matrix(NA, 264,264)
+matrix_fc[lower.tri(matrix_fc, diag = F)] = subj_net_files_1[[1]][,1]
+```
+
+
+```{r }
+matrix_fc = symmetrize(matrix_fc, rule = "lower")
+levelplot(matrix_fc,scales=list(draw=FALSE),col.regions = rev(rainbow(100))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='Functional Connectivity'),xlab="",ylab="")
+```
+
+
+```{r}
+fc_widematrix = data.frame()
+
+for (subj in gps_corplot$subj){
+      subj = as.character(ids[ids$beiweID == subj,'BBLID'])
+      fc_widematrix = rbind(fc_widematrix,subj_net_files_1[[subj]]$V1)
+}
+
+
+
+fc_widematrix = t(fc_widematrix)
+fc_corplot = rquery.cormat(fc_widematrix, type = "full",graph=FALSE)
+fc_corplot$subj = gps_corplot$subj
+levelplot(fc_corplot$r,scales=list(draw=FALSE),col.regions = rev(rainbow(100))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='GPS Feature Similarity'),xlab="",ylab="")
+```
+
