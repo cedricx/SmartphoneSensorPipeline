@@ -16,6 +16,7 @@ Affiliation: Penn Lifespan Informatics and Neuroimaging Center ([PennLINC](pennl
 
 ***
 
+### 1. Setup Environment 
 ```{r load libraries, message=FALSE}
 require(reshape2)
 require(sna)
@@ -23,29 +24,46 @@ require(sna)
 
 ```{r define paths}
 project_path = "~/Documents/xia_gps/"
-data_path = file.path(project_path,"data/flywheel_data/network/")
+data_path = file.path(project_path,"data/flywheel_data/network_txt")
+
 ```
 
-
+### 2. Setup Target and Database FC
 ```{r}
-subjects = list.files(data_path)
-atlas = "power264"
+
+atlases = c("HarvardOxford","desikanKilliany","aal116","schaefer200x7","power264","gordon333","glasser360","schaefer400x7")
 subj_net_files_1 = list()
 subj_net_files_2 = list()
 
-for (subj in subjects) {
-  subj_files = list.files(file.path(data_path,subj))
-  net_pattern_1 = paste0("*",subj,"*task-rest*","*single*",atlas,"*")
-  net_pattern_2 = paste0("*",subj,"*task-rest*","*multi*",atlas,"*")
-  
-  file_path_1 = file.path(data_path, subj,subj_files[grep(glob2rx(net_pattern_1),subj_files)])
-  file_path_2 = file.path(data_path, subj,subj_files[grep(glob2rx(net_pattern_2),subj_files)])
-  
-  if (length(file_path_1)>0) {subj_net_files_1[[subj]] = read.table(file_path_1) }
-  if (length(file_path_2)>0) {subj_net_files_2[[subj]] = read.table(file_path_2) }
+for (atlas in atlases) {
+  subjects = list.files(file.path(data_path))
+  for (subj in subjects) {
+    subj_files = list.files(file.path(data_path,subj))
+    net_pattern_1 = paste0("*task-rest*single*",atlas,"*")
+    net_pattern_2 = paste0("*task-rest*multi*",atlas,"*")
+    
+    file_path_1 = file.path(data_path, 
+                            subj,subj_files[grep(glob2rx(net_pattern_1),subj_files)])
+    file_path_2 = file.path(data_path, 
+                            subj,subj_files[grep(glob2rx(net_pattern_2),subj_files)])
+    
+    if (length(file_path_1)>0) {subj_net_files_1[[atlas]][[subj]] = read.table(file_path_1) }
+    if (length(file_path_2)>0) {subj_net_files_2[[atlas]][[subj]] = read.table(file_path_2) }
+  }
 }
 ```
 
+
+#### Visutalize FC matrix
+```{r }
+matrix_fc = matrix(NA, 264,264)
+matrix_fc[lower.tri(matrix_fc, diag = F)] = subj_net_files_1[[1]][,1]
+matrix_fc = symmetrize(matrix_fc, rule = "lower")
+levelplot(matrix_fc,scales=list(draw=FALSE),col.regions = rev(rainbow(80))[-c(1:5)], region =T, ylab.right = "Pearson correlation", main=list(label='Functional Connectivity'),xlab="",ylab="")
+```
+
+
+### 3. Match FC target to database
 
 ```{r}
 
@@ -81,32 +99,68 @@ summary(fit)
 ```
 
 
+### 4. Create Subj Similarity Matrix
+```{r GPS similarity matrix}
+gps_wide_matrix = data.frame()
 
-```{r }
-matrix_fc = matrix(NA, 264,264)
-matrix_fc[lower.tri(matrix_fc, diag = F)] = subj_net_files_1[[1]][,1]
-```
-
-
-```{r }
-matrix_fc = symmetrize(matrix_fc, rule = "lower")
-levelplot(matrix_fc,scales=list(draw=FALSE),col.regions = rev(rainbow(100))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='Functional Connectivity'),xlab="",ylab="")
-```
-
-
-```{r}
-fc_widematrix = data.frame()
-
-for (subj in gps_corplot$subj){
-      subj = as.character(ids[ids$beiweID == subj,'BBLID'])
-      fc_widematrix = rbind(fc_widematrix,subj_net_files_1[[subj]]$V1)
+for (subj in arrange(subj_days,`Days Collected`)$IID){
+  #if ((subj %in% subj_days$IID[which(subj_days$`Days Collected`<=10)]) == T) {
+    for (part in 1:1){
+      half_1 = gps_clean2_feature$subj_mat_1[[subj]][[part]]$cor
+      half_2 = gps_clean2_feature$subj_mat_2[[subj]][[part]]$cor
+      half_1_half_2 = c(half_1,half_2)
+      gps_wide_matrix = rbind(gps_wide_matrix,half_1)
+      gps_wide_matrix = rbind(gps_wide_matrix,half_2)
+      }
+    #}
 }
 
+gps_wide_matrix = t(gps_wide_matrix)
+gps_corplot = rquery.cormat(gps_wide_matrix, type = "full",graph=FALSE)
+gps_corplot$subj = arrange(subj_days,`Days Collected`)$IID
 
+levelplot(gps_corplot$r,scales=list(draw=FALSE),col.regions = rev(rainbow(1000))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='GPS Feature Similarity'),xlab="",ylab="")
+```
 
-fc_widematrix = t(fc_widematrix)
-fc_corplot = rquery.cormat(fc_widematrix, type = "full",graph=FALSE)
-fc_corplot$subj = gps_corplot$subj
-levelplot(fc_corplot$r,scales=list(draw=FALSE),col.regions = rev(rainbow(100))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='GPS Feature Similarity'),xlab="",ylab="")
+```{r FC calculate between-atlas similarity matrix}
+
+subj_seq = gps_corplot$subj
+
+fc_widematrix = list()
+fc_corplot = list()
+for (atlas in atlases){
+  print(paste("atlas:", atlas))
+    for (subj in subj_seq){
+        #print(subj)
+        subj_id = as.character(ids[ids$beiweID == subj,'BBLID'])
+        #print(subj_id)
+        fc_1 = unlist(subj_net_files_1[[atlas]][[subj_id]]$V1)
+        fc_2 = unlist(subj_net_files_2[[atlas]][[subj_id]]$V1)
+        
+        fc_widematrix[[atlas]] = cbind(fc_widematrix[[atlas]],fc_1)
+        fc_widematrix[[atlas]] = cbind(fc_widematrix[[atlas]],fc_2)
+        #print(dim(fc_widematrix[[atlas]])[2])
+    }
+    print(dim(fc_widematrix[[atlas]])[2])
+    fc_corplot[[atlas]]$sim_mat = rquery.cormat(fc_widematrix[[atlas]], type = "full",graph=FALSE)
+    fc_corplot[[atlas]]$subj = subj_seq
+    fc_corplot[[atlas]]$plot = levelplot(fc_corplot[[atlas]]$sim_mat$r,scales=list(draw=FALSE),col.regions = rev(rainbow(100))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label=paste('FC Similarity Matrix \n ', atlas)),xlab="",ylab="")
+  }
+
+```
+```{r calculate similiary matrix between atlases}
+fc_cor_r = lapply(fc_corplot, function(atlas) atlas$sim_mat$r[lower.tri(atlas$sim_mat$r)])
+fc_cor_r_cor = lapply(fc_cor_r, function(r1) sapply(fc_cor_r, function(r2) cor.test(r1,r2)))
+fc_cor_r_cor_mat = sapply(fc_cor_r_cor, function(atlas) atlas['estimate',])
+
+levelplot(fc_cor_r_cor_mat,col.regions = rev(rainbow(100))[-c(1:20)], 
+          region =T, ylab.right = "Pearson correlation", 
+          main=list(label=paste('FC Atlas Similarity Matrix')), xlab="",ylab="", 
+          scales=list(x=list(at = 1:length(atlases), labels=atlases,rot=90, tck = 0),
+                              y=list(at = 1:length(atlases),labels=atlases, tck = 0)))
+
+```
+```{r compare FC and GPS similarity matrix}
+
 ```
 

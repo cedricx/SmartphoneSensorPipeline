@@ -209,15 +209,14 @@ gps_wide_matrix = data.frame()
 
 for (subj in arrange(subj_days,`Days Collected`)$IID){
   #if ((subj %in% subj_days$IID[which(subj_days$`Days Collected`<=10)]) == T) {
-  if (subj != ids[ids$BBLID == "21059",'beiweID']) {
-    for (part in 1:1){
+    for (part in 1:5){
       half_1 = gps_clean2_feature$subj_mat_1[[subj]][[part]]$cor
       half_2 = gps_clean2_feature$subj_mat_2[[subj]][[part]]$cor
       half_1_half_2 = c(half_1,half_2)
-      gps_wide_matrix = rbind(gps_wide_matrix,half_1_half_2)
+      gps_wide_matrix = rbind(gps_wide_matrix,half_1)
+      gps_wide_matrix = rbind(gps_wide_matrix,half_2)
       }
     #}
-  }
 }
 
 gps_wide_matrix = t(gps_wide_matrix)
