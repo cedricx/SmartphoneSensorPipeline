@@ -41,6 +41,9 @@ require(dplyr)
 require(ggpubr)
 require(mosaic)
 require(openxlsx)
+require(visreg)
+require(factoextra)
+require(rstatix)
 source('~/Documents/GitHub/SmartphoneSensorPipeline/Extra/plotting_functions.R')
 ```
 
@@ -190,18 +193,18 @@ gps_cor = rquery.cormat(example_data, type = "full")
 We then calculated the feature matrix for all `r length(unique(gps_df_clean2$IID))` subjects in the dataset, seperately for each half data partition, and for each random split. 
 
 ```{r create feature matrix for everyone, warning=FALSE}
-make_feature_matrix = function(gps_df, subj_seq) {
+make_feature_matrix = function(gps_df, subj_seq, range) {
   subj_mat_1 = list()
   subj_mat_2 = list()
   for (subj in unique(gps_df$IID)){
-    subj_data = subset(gps_df_clean2, IID==subj)
-    subj_mat_1[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[list,3:17], type = "flatten", graph = F)$r)
-    subj_mat_2[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[-list,3:17], type = "flatten", graph = F)$r)
+    subj_data = subset(gps_df, IID==subj)
+    subj_mat_1[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[list,range], type = "flatten", graph = F)$r)
+    subj_mat_2[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[-list,range], type = "flatten", graph = F)$r)
   }
   return(list(subj_mat_1 = subj_mat_1, subj_mat_2 = subj_mat_2 ))
 }
 
-gps_clean2_feature = make_feature_matrix(gps_df_clean2)
+gps_clean2_feature = make_feature_matrix(gps_df_clean2, subj_seq, 3:17 )
 ```
 
 ```{r visualization of feature correlations across subjects}
@@ -267,8 +270,9 @@ match_cor = calc_match_cor(subj_mat_1,subj_mat_2)
 By tallying up all the successful and unsuccessful matchs in each of the `r part_times` random splits, we calculated a distribution of match accuracy.
 
 ```{r calc accuracy by partition}
-calc_acc_time=function(match_cor,part_times, method = "max") {
+calc_acc_time=function(match_cor,method = "max") {
   acc_time = array()
+  part_times = length(match_cor[[1]])
   for (time in 1:part_times){
     acc_time[time] = 0
     for (subj in names(subj_mat_1)){
@@ -288,21 +292,22 @@ calc_acc_time=function(match_cor,part_times, method = "max") {
   acc_time = acc_time/length(names(subj_mat_1))
   return(acc_time)
 }
-acc_time = calc_acc_time(match_cor,part_times)
+acc_time = calc_acc_time(match_cor, "max")
 ```
 
 Over the `r part_times` random splits, the mean match accuracy was `r round(mean(acc_time),4)*100`%, with a standard deviation of `r round(sd(acc_time),4)*100`%, high of `r round(max(acc_time),4)*100`%, and low of `r round(min(acc_time),4)*100`%, (95%CI: `r round(CI(acc_time)['lower'],2)`-`r round(CI(acc_time)['upper'],2)`).
 
 ```{r plot accuracy by partition histogram, fig.width=8, fig.height=4}
-p_time_cor = hist_chx(acc_time, bins = 15, title = paste("Correlated Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+p_time_cor = hist_chx(acc_time, bins = 15, title = paste("Covariance Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 ggplotly(p_time_cor)
 ```
 **Figure 7: Match accuracy distributon across `r part_times` data splits.** Mean match accuracy was `r round(CI(acc_time)['mean'],2)` (95%CI: `r round(CI(acc_time)['lower'],2)`-`r round(CI(acc_time)['upper'],2)`)
 
 
 ```{r calc accuracy by subj}
-calc_acc_subj = function(match_cor, part_times, method = "max"){
+calc_acc_subj = function(match_cor, method = "max"){
   acc_subj = array()
+  part_times = length(match_cor[[1]])
   for (subj in names(subj_mat_1)){
     acc_subj[subj] = 0
     for (time in 1:part_times){
@@ -322,7 +327,7 @@ calc_acc_subj = function(match_cor, part_times, method = "max"){
   acc_subj = acc_subj[-1]
   return(acc_subj)
 }
-acc_subj = calc_acc_subj(match_cor, part_times)
+acc_subj = calc_acc_subj(match_cor)
 ```
 
 
@@ -591,49 +596,62 @@ perm_vector = function(gps_df, perm_time, method_feature, method_match){
 ```
 
 
-```{r run permutation for mean features match by cor, fig.width= 6, message=FALSE}
+```{r run permutation for mean features match by cor, fig.width=6, message=FALSE, include=FALSE}
 perm_mean_cor = perm_vector(gps_df_clean2, 1000, "mean", "cor")
 
 p_time_mean_cor = hist_chx(acc_time_mean_cor, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(acc_time_mean),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_mean_cor =  hist_chx(unlist(perm_mean_cor$perm_acc_time), bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(perm_mean_cor$perm_acc_time),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
+```
 
+```{r fig.width= 6, message=FALSE}
 p_time_mean_cor + q_time_mean_cor
 ```
+
 **Figure 11: Prediction accuracy using mean features and matched by max pearson correlation**.
 
-```{r run permutation for mean features match by rmse, fig.width= 6, message=FALSE}
+```{r run permutation for mean features match by rmse, fig.width=6, message=FALSE, include=FALSE}
 perm_mean_rmse = perm_vector(gps_df_clean2, 1000, "mean", "rmse")
 
 p_time_mean_rmse = hist_chx(acc_time_mean_rmse, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(acc_time_mean),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_mean_rmse =  hist_chx(unlist(perm_mean_rmse$perm_acc_time), bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(perm_mean_rmse$perm_acc_time),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
+```
+
+```{r fig.width= 6, message=FALSE}
 p_time_mean_rmse + q_time_mean_rmse
 ```
+
 **Figure 11: Prediction accuracy using mean features and matched by min root mean squared**.
 
 
-```{r run permutation for rmssd features matched by cor, fig.width= 6, message=FALSE}
+```{r run permutation for rmssd features matched by cor, fig.width=6, message=FALSE, include=FALSE}
 perm_rmssd_cor = perm_vector(gps_df_clean2, 1000, "rmssd","cor")
 
 p_time_rmssd_cor = hist_chx(acc_time_rmssd_cor, bins = 8, title = paste("RMSSD Features: \n Average Accuracy Across",length(acc_time_rmssd_cor),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_rmssd_cor = hist_chx(unlist(perm_rmssd_cor$perm_acc_time), bins = 8, title = paste("RMSSD Features: Average Accuracy Across",length(perm_rmssd_cor$perm_acc_time_cor),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
+```
 
+```{r fig.width=6, message=FALSE}
 p_time_rmssd_cor + q_time_rmssd_cor
 ```
+
 **Figure 12: Prediction accuracy using RMSSD features and matched by max pearson correlation**.
 
-```{r run permutation for rmssd features matched by rmse, fig.width= 6, message=FALSE}
+```{r run permutation for rmssd features matched by rmse, message=FALSE, include=FALSE}
 perm_rmssd_rmse = perm_vector(gps_df_clean2, 1000, "rmssd","rmse")
 
 p_time_rmssd_rmse = hist_chx(acc_time_rmssd_rmse, bins = 8, title = paste("RMSSD Features: \n Average Accuracy Across",length(acc_time_rmssd_cor),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_rmssd_rmse = hist_chx(unlist(perm_rmssd_rmse$perm_acc_time), bins = 8, title = paste("RMSSD Features: Average Accuracy Across",length(perm_rmssd_rmse$perm_acc_time_cor),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
+```
 
+```{r fig.width=6, message=FALSE}
 p_time_rmssd_rmse + q_time_rmssd_rmse
 ```
+
 **Figure 13: Prediction accuracy using RMSSD features and matched by min root mean squared**.
 
 ```{r define combine perm subj functions}
@@ -685,8 +703,9 @@ ggplotly(p_subj_rmssd_perm)
 
 
 ### 12. Compare Features
-```{r compare across data partition, fig.width=8}
+```{r compare across data partition, fig.height=3, fig.width=10}
 p_time_cor + p_time_mean + p_time_rmssd
+q_time_cor + q_time_mean + q_time_rmssd
 ```
 **Figure 16: Prediction accuracy across three feature sets**.
 
@@ -697,7 +716,7 @@ p_subj_cor_perm / p_subj_mean_perm / p_subj_rmssd_perm
 
 
 ### 13. Confounding variables
-```{r subj accuracy cor with potential confounders, fig.height=6, fig.width=7, wmessage=FALSE, warning=FALSE}
+```{r subj accuracy cor with potential confounders, fig.height=6, fig.width=7, warning=FALSE, wmessage=FALSE}
 conf_scatter_plot = function(conf_var, acc_subj, col){
   if (!identical(conf_var$IID,names(acc_subj))) {
     stop("subj names do not match")
@@ -752,19 +771,19 @@ for (subj in names(subj_mat_1)){
 
 ```
 
-```{r match with combined features, fig.align="center"}
-match_combined_feat = calc_match_vector(gps_clean2_combined_feat$subj_mat_1, gps_clean2_combined_feat$subj_mat_2)
-acc_time_cb  = calc_acc_time(match_combined_feat, part_times)
-acc_subj_cb  = calc_acc_subj(match_combined_feat, part_times)
+```{r match with combined features, fig.align="center", fig.height=3, fig.width=3}
+match_combined_feat = calc_match_vector(gps_clean2_combined_feat$subj_mat_1, gps_clean2_combined_feat$subj_mat_2, "cor")
+acc_time_cb  = calc_acc_time(match_combined_feat, part_times, "max")
+acc_subj_cb  = calc_acc_subj(match_combined_feat, part_times, "max")
 p = hist_chx(acc_time_cb, bins = 8, title = paste("Combined Features \n by data partition"), xaxis = "Prediction Accuracy", yaxis = "Count")
 q = hist_chx(acc_subj_cb, bins = 8, title = paste("Combined Features \n by subject"), xaxis = "Prediction Accuracy", yaxis = "Count")
-p + q
+p
 ```
 **Figure 20: Prediction accuracy when all three sets of features were combined**. 
 
 
 ### 15. Associations with Psychopathology
-```{r psychopathology , fig.align = "center", fig.height=3, fig.width=6, message=FALSE, warning=FALSE}
+```{r psychopathology, fig.align="center", fig.height=6, fig.width=3, message=FALSE, warning=FALSE}
 ids = read.xlsx(file.path(project_path,"data/clinical_data/subjecttracker_4.xlsx"))[1:length(unique(gps_df_clean2$IID)),]
 #psych_score = read.csv(file.path(project_path,"data/self_report_scored_20200128.csv"))
 # psych_pro = psych %>% filter(ari_proband_complete == 2)
@@ -781,49 +800,183 @@ psych_sum = psych_beiwe_acc_subj %>%
 
 psych_sum = inner_join(psych_sum, subj_days, by = c("beiweID" = "IID"))
 psych_sum$days = psych_sum$`Days Collected`
-psych_sp = function(psych_df,psych_var, xlab) {
- sp = ggscatter(psych_df, y = psych_var, x = "acc",
+psych_sum = inner_join(subj_minmissing, psych_sum, by = c( "IID" = "beiweID" ))
+ # show results
+
+als_fit = lm( acc ~ scale(sum_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+ari_fit = lm( acc ~ scale(sum_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+ari_als_fit = lm( acc ~ scale(sum_ari) + scale(sum_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+
+days_plot = visreg(als_fit, "days", gg = T, line=list(col="black")) + 
+            ylab("GPS Footprint \n Prediction Accuracy") + xlab("Days Collected") +
+            theme_cowplot() + stat_cor(method = "pearson")
+sum_als_plot = visreg(ari_als_fit, "sum_als", gg = T,  line=list(col="black")) + 
+            ylab("GPS Footprint \n Prediction Accuracy") + xlab("Affective Lability Score (ALS)") +
+            theme_cowplot() + stat_cor(method = "pearson")
+sum_ari_plot = visreg(ari_als_fit, "sum_ari", gg = T, line=list(col="black")) + 
+            ylab("GPS Footprint \n Prediction Accuracy") + xlab("Affective Reactivity Index (ARI)") +
+            theme_cowplot() + stat_cor(method = "pearson")
+days_plot / sum_als_plot / sum_ari_plot
+```
+**Figure 21: Associations between irritability and prediction accuracy**. 
+
+### 16. Associations with Cognition
+```{r Cognition, fig.align="center", fig.height=3, fig.width=6, message=FALSE, warning=FALSE}
+cnb_score = read.csv(file.path(project_path,"data/grmpy_bifactor_cnb_cleaned.csv"))
+cor_traits = read.csv(file.path(project_path,"data/grmpy_corrtraits_cnb_cleaned.csv"))
+cnb_beiwe = inner_join(ids,cnb_score, by = c("BBLID" = "bblid"))
+
+```
+
+### 17.Similarity Matrix Correlation
+```{r}
+gps_wide_matrix_all = data.frame()
+
+subj_seq_mat = arrange(subj_days,`Days Collected`)$IID
+
+for (subj in subj_seq_mat){
+  #if ((subj %in% subj_days$IID[which(subj_days$`Days Collected`<=10)]) == T) {
+    for (part in 1:1){
+      half_1 = gps_clean2_feature$subj_mat_1[[subj]][[part]]$cor
+      half_2 = gps_clean2_feature$subj_mat_2[[subj]][[part]]$cor
+      half_1_half_2 = c(half_1,half_2)
+      gps_wide_matrix_all = rbind(gps_wide_matrix_all,half_1_half_2)
+      }
+    #}
+}
+
+gps_wide_matrix_all = t(gps_wide_matrix_all)
+gps_corplot_all = rquery.cormat(gps_wide_matrix_all, type = "full",graph=FALSE)
+gps_corplot_all$subj = arrange(subj_days,`Days Collected`)$IID
+
+levelplot(gps_corplot_all$r,scales=list(draw=FALSE),col.regions = rev(rainbow(1000))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='GPS Feature Similarity'),xlab="Subjects",ylab="Subjects")
+```
+
+```{r}
+n_subj = length(subj_seq_mat)
+gps_days_sim_matrix = matrix(NA, n_subj,n_subj)
+for (i in 1:n_subj){
+  for (j in 1:n_subj){
+    subj_i_days = subj_days$`Days Collected`[which(subj_days$IID == subj_seq_mat[i])]
+    subj_j_days = subj_days$`Days Collected`[which(subj_days$IID == subj_seq_mat[j])]
+    gps_days_sim_matrix[i,j] = abs(subj_i_days-subj_j_days)/max(subj_days$`Days Collected`)
+  }
+}
+levelplot(gps_days_sim_matrix,scales=list(draw=FALSE),col.regions = rev(rainbow(1000))[-c(1:20)], region =T, ylab.right = "Differences in Days Collected", main=list(label='Days Collected Similarity'),xlab="Subjects",ylab="Subjects")
+
+```
+
+```{r}
+n_subj = length(subj_seq_mat)
+gps_mins_sim_matrix = matrix(NA, n_subj,n_subj)
+for (i in 1:n_subj){
+  for (j in 1:n_subj){
+    subj_i_mins = subj_minmissing$MinsMissing[which(subj_minmissing$IID == subj_seq_mat[i])]
+    subj_j_mins = subj_minmissing$MinsMissing[which(subj_minmissing$IID == subj_seq_mat[j])]
+    gps_mins_sim_matrix[i,j] = abs(subj_i_mins-subj_j_mins)/max(subj_minmissing$MinsMissing)
+  }
+}
+levelplot(gps_mins_sim_matrix,scales=list(draw=FALSE),col.regions = rev(rainbow(1000))[-c(1:20)], region =T, ylab.right = "Differences in Days Collected", main=list(label='Mins Missing Similarity'),xlab="Subjects",ylab="Subjects")
+
+```
+
+```{r fig.height=6, fig.width=6}
+gps_sim_df = data.frame(gps = gps_corplot_all$r[lower.tri(gps_corplot_all$r)], days = gps_days_sim_matrix[lower.tri(gps_days_sim_matrix)], mins = gps_mins_sim_matrix[lower.tri(gps_mins_sim_matrix)])
+
+days_sim_plot = ggscatter(gps_sim_df, y = "gps", x = "days",
    add = "reg.line",  # Add regressin line
    add.params = list(color = "black", fill = "lightgray"), # Customize reg. line
    conf.int = TRUE # Add confidence interval
    ) + stat_cor(method = "pearson") +
     theme_cowplot() + theme(plot.title = element_text(hjust = 0.5)) +
-    labs(x = "Prediction Accuracy", y = xlab, title = xlab)
-  return(sp)
+    labs(y = "GPS Similarity", x = "Days Collected Similarity", title = "Similarity Correlation")
+
+mins_sim_plot = ggscatter(gps_sim_df, y = "gps", x = "mins",
+   add = "reg.line",  # Add regressin line
+   add.params = list(color = "black", fill = "lightgray"), # Customize reg. line
+   conf.int = TRUE # Add confidence interval
+   ) + stat_cor(method = "pearson") +
+    theme_cowplot() + theme(plot.title = element_text(hjust = 0.5)) +
+    labs(y = "GPS Similarity", x = "Mins Missing Similarity", title = "Similarity Correlation")
+
+days_sim_plot / mins_sim_plot
+```
+
+### 18.GPS Score
+```{r}
+gps_mean = gps_df_clean2 %>% group_by(IID) %>% summarise_if(is.numeric, mean, na.rm = TRUE)
+res.pca <- prcomp(gps_mean[,2:16], scale = TRUE)
+fviz_eig(res.pca)
+gps_score = res.pca$x[,'PC1']
+gps_score_df = data.frame(beiweID = gps_mean$IID, gps_score = gps_score)
+fc_com_mean_1 = as.data.frame(sapply(fc_com_1, function(com) sapply(com, function(subj) mean(subj$V1))))
+fc_com_mean_1$BBLID = as.numeric(rownames(fc_com_mean_1))
+fc_com_mean_1 = inner_join(ids[,c(1,3)],fc_com_mean_1, by = "BBLID" )
+fc_com_mean_1_gps = inner_join(fc_com_mean_1,gps_score_df, by = "beiweID")
+
+
+fviz_pca_ind(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_var(res.pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_biplot(res.pca, repel = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+```
+### 19.Feature Leison
+
+```{r feature leison experiment, message=FALSE, warning=FALSE}
+feat_names = names(gps_df_clean2[,3:17])
+gps_ft_leison = list()
+for (i in 1:15){
+  ft_rmv = feat_names[i]
+  print(ft_rmv)
+  range = c(3:17)[-i]
+  print(range)
+  feature_nd = make_feature_matrix(gps_df_clean2,subj_seq,range)
+  match_cor_nd = calc_match_cor(feature_nd$subj_mat_1,feature_nd$subj_mat_2)
+  gps_ft_leison[[ft_rmv]]$acc_time = calc_acc_time(match_cor_nd, "max")
+  gps_ft_leison[[ft_rmv]]$acc_subj = calc_acc_subj(match_cor_nd, "max")
+  print(mean(gps_ft_leison[[ft_rmv]]$acc_time))
 }
 
-sp_als = psych_sp(psych_sum, 'sum_als',"Affective Lability Score (ALS)")
-sp_ari = psych_sp(psych_sum, 'sum_ari',"Affective Reactivity Index (ARI)")
-
-sp_als + sp_ari
- # show results
-
-
-fit = lm( acc ~ sum_als + sum_ari+ days, data = psych_sum)
-summary(fit)
-```
-**Figure 21: Associations between irritability and prediction accuracy**. 
-
-### 16. Associations with Cognition
-```{r psychopathology, fig.align="center", fig.height=3, fig.width=6, message=FALSE, warning=FALSE}
-cnb_score = read.csv(file.path(project_path,"data/grmpy_bifactor_cnb_cleaned.csv"))
-cor_traits = read.csv(file.path(project_path,"data/grmpy_corrtraits_cnb_cleaned.csv"))
-cnb_beiwe = inner_join(ids,cnb_score, by = c("BBLID" = "bblid"))
-
 ```
 
+```{r gps_lesion_df}
+acc_time_lesion_df = as.data.frame(sapply(gps_ft_leison, function(lesion) lesion$acc_time))
+acc_time_lesion_df$`None_Removed` = acc_time
+acc_time_lesion_df <- as.data.frame(gather(acc_time_lesion_df, feature, acc_time, colnames(acc_time_lesion_df), factor_key=TRUE))
 
-### 17. Associations with Cognition
-```{r psychopathology, fig.align="center", fig.height=3, fig.width=6, message=FALSE, warning=FALSE}
-cnb_score = read.csv(file.path(project_path,"data/grmpy_bifactor_cnb_cleaned.csv"))
-cor_traits = read.csv(file.path(project_path,"data/grmpy_corrtraits_cnb_cleaned.csv"))
-cnb_beiwe = inner_join(ids,cnb_score, by = c("BBLID" = "bblid"))
+stat.test <- acc_time_lesion_df %>% rstatix::t_test(acc_time ~ feature, ref.group = "None_Removed", p.adjust.method = "bonferroni")
 
+p<-ggplot(acc_time_lesion_df, aes(x=reorder(feature, acc_time, FUN = median), y=acc_time)) + 
+   geom_jitter(aes(colour = feature), show.legend = F, width = 0.10) + 
+  geom_boxplot(show.legend = F, alpha = 0.2, outlier.alpha = 0) +
+  #scale_y_continuous(limits=c(-0.1,0.5)) +
+   #ggtitle("Feature Leison Analysis")  +
+  theme_cowplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+   ylab("GPS Prediciton Accuracy") + xlab("Feature Removed") + 
+  ggpubr::stat_pvalue_manual(
+    stat.test, label = "p.adj", 
+    y.position = 0.8,
+    remove.bracket = F,
+    step.increase = 0.1,
+    hide.ns = T
+    )
+p
 ```
 
 
-
-### 18. Misc Info
+### 19. Misc Info
 ```{r message=FALSE, warning=FALSE}
 #sessionInfo()
 ```
