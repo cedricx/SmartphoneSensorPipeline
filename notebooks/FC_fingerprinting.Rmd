@@ -210,19 +210,41 @@ get_fc_com = function(atlas_now, subj_net) {
   return(fc_mat_now_all_short)
 }
 
+cor_perm = function(x, y, perm_time, method){
+  real_cor = suppressWarnings(cor.test(x,y, method = method))$estimate
+  perm_cor = c()
+  for (i in 1:perm_time){
+    x = sample(x)
+    perm_cor[i] = suppressWarnings(cor.test(x,y, method = method))$estimate
+    if(i == 1000) {print(i)}
+  }
+  if (real_cor >=0){
+    p_perm = length(which(perm_cor > real_cor))/perm_time
+  } else {
+    p_perm = length(which(perm_cor < real_cor))/perm_time
+  }
+  
+  return(p_perm)
+}
+
 
 fc_com_gps = function(subj_net_files_1,subj_net_files_2,atlas_now){
   atlas_path = "/Users/hxia/Documents/GitHub/xcpEngine/atlas"
   fc_com_1 = get_fc_com(atlas_now, subj_net = subj_net_files_1)
   fc_com_2 = get_fc_com(atlas_now, subj_net = subj_net_files_2)
-  fc_com_corplot = sim_plots(subj_seq, ids,names(fc_com_1) , fc_com_1, fc_com_2)
+  fc_com_corplot = sim_plots(subj_seq = gps_corplot$subj, ids,names(fc_com_1) , fc_com_1, fc_com_2)
   fc_com_cor_r = lapply(fc_com_corplot, function(atlas) atlas$sim_mat$r[lower.tri(atlas$sim_mat$r)])
-  fc_com_gps_pvalue = unlist(sapply(fc_com_cor_r, function(atlas) cor.test(atlas, gps_corplot$r[lower.tri(gps_corplot$r)]))[c('p.value'),])
-  fc_com_gps_cor = unlist(sapply(fc_com_cor_r, function(atlas) cor.test(atlas, gps_corplot$r[lower.tri(gps_corplot$r)]))[c('estimate'),])
-  fc_com_gps_cor_df = data_frame(atlas = gsub("\\..*","",names(fc_com_gps_cor)), corr = fc_com_gps_cor, p_val = fc_com_gps_pvalue )
+  fc_com_gps_pvalue = unlist(sapply(fc_com_cor_r, function(atlas) suppressWarnings(cor.test(atlas, gps_corplot$r[lower.tri(gps_corplot$r)], method = "spearman")$p.value)))
+  fc_com_gps_cor = unlist(sapply(fc_com_cor_r, function(atlas) suppressWarnings(cor.test(atlas, gps_corplot$r[lower.tri(gps_corplot$r)], method = "spearman")$estimate)))
+  fc_com_gps_p_perm = unlist(sapply(fc_com_cor_r, function(atlas) cor_perm(atlas, gps_corplot$r[lower.tri(gps_corplot$r)],1000,  method = "spearman")))
+                          
+                          
+  fc_com_gps_cor_df = data_frame(atlas = gsub("\\..*","",names(fc_com_gps_cor)), corr = fc_com_gps_cor, p_val = fc_com_gps_pvalue, p_perm = fc_com_gps_p_perm )
   fc_com_gps_cor_df$p_val_adj = p.adjust(fc_com_gps_cor_df$p_val,method = "bonferroni")
+  fc_com_gps_cor_df$p_perm_adj = p.adjust(fc_com_gps_cor_df$p_perm,method = "bonferroni")
   fc_com_gps_cor_df$sig = fc_com_gps_cor_df$p_val_adj< 0.05
-  p = ggplot(data=fc_com_gps_cor_df, aes(x=reorder(atlas, -corr), y=corr, fill = sig)) +
+  fc_com_gps_cor_df$sig_perm = fc_com_gps_cor_df$p_perm_adj< 0.05
+  p = ggplot(data=fc_com_gps_cor_df, aes(x=reorder(atlas, -corr), y=corr, fill = sig_perm)) +
     geom_bar(stat="identity") + scale_y_continuous(limits=c(-0.5,0.5)) +
     theme_cowplot() + theme(axis.text.x = element_text(angle = 90)) +
     ylab("FC-GPS Similarity Matrices Correlatons") + xlab("") + ggtitle(atlas_now) + theme(plot.title = element_text(hjust = 0.5))
@@ -250,7 +272,7 @@ fc_com_gps_out_corplot = function(fc_com_gps_out, title) {
   com_names = fc_com_gps_out$com_names
   rownames(com_gps_corr_mat) = com_names
   colnames(com_gps_corr_mat) = com_names
-  com_gps_pval_mat = vector_to_mat(fc_com_gps_out$fc_gps_df$p_val_adj,"half+d")
+  com_gps_pval_mat = vector_to_mat(fc_com_gps_out$fc_gps_df$p_perm_adj,"half+d")
   col2 <- colorRampPalette(c("#67001F", "#B2182B", 
                              "#FFFFFF", 
                              "#2166AC", "#053061"))

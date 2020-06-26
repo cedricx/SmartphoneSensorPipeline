@@ -783,7 +783,7 @@ p
 
 
 ### 15. Associations with Psychopathology
-```{r psychopathology, fig.align="center", fig.height=6, fig.width=3, message=FALSE, warning=FALSE}
+```{r psychopathology, fig.align="center", message=FALSE, warning=FALSE}
 ids = read.xlsx(file.path(project_path,"data/clinical_data/subjecttracker_4.xlsx"))[1:length(unique(gps_df_clean2$IID)),]
 #psych_score = read.csv(file.path(project_path,"data/self_report_scored_20200128.csv"))
 # psych_pro = psych %>% filter(ari_proband_complete == 2)
@@ -795,17 +795,36 @@ psych_beiwe_acc_subj = inner_join(acc_subj_df,psych_beiwe, by = "beiweID")
 
 
 psych_sum = psych_beiwe_acc_subj %>%
-            mutate(sum_als = rowSums(.[grep("^als_[0-9]$",colnames(psych_beiwe_acc_subj))], na.rm = T)) %>%
+            mutate(sum_als = rowSums(.[263:280], na.rm = T)) %>%
             mutate(sum_ari = rowSums(.[grep("^ari_[0-9]$",colnames(psych_beiwe_acc_subj))], na.rm = T))
 
 psych_sum = inner_join(psych_sum, subj_days, by = c("beiweID" = "IID"))
 psych_sum$days = psych_sum$`Days Collected`
 psych_sum = inner_join(subj_minmissing, psych_sum, by = c( "IID" = "beiweID" ))
+psych_als = data.frame(als = psych_sum[,263:280], BBLID = psych_sum$BBLID)
+psych_ari = data.frame(ari = psych_sum[,23:29], BBLID = psych_sum$BBLID)
+  
  # show results
 
-als_fit = lm( acc ~ scale(sum_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
-ari_fit = lm( acc ~ scale(sum_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
-ari_als_fit = lm( acc ~ scale(sum_ari) + scale(sum_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+als.pca <- prcomp(na.omit(psych_sum[,263:280]), scale = TRUE)
+ari.pca <- prcomp(na.omit(psych_sum[,23:29], scale = TRUE))
+
+psych_sum$pca_als = c(als.pca$x[1:22,"PC1"], NA, als.pca$x[23:40,"PC1"])
+psych_sum$pca_ari = ari.pca$x[,"PC1"]
+psych_sum$als_AD = psych_sum$als_2 + psych_sum$als_10 + psych_sum$als_5 + psych_sum$als_12 + psych_sum$als_13 + psych_sum$als_15 + psych_sum$als_16 + psych_sum$als_17 + psych_sum$als_18
+fviz_eig(als.pca) / fviz_eig(ari.pca)
+
+```
+
+```{r }
+
+
+
+als_fit = lm( acc ~ scale(pca_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+summary(lm( acc ~ scale(als_AD) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum))$coefficients[2,4]
+
+ari_fit = lm( acc ~ scale(pca_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+ari_als_fit = lm( acc ~ scale(pca_als) + scale(pca_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
 
 days_plot = visreg(als_fit, "days", gg = T, line=list(col="black")) + 
             ylab("GPS Footprint \n Prediction Accuracy") + xlab("Days Collected") +
@@ -961,18 +980,22 @@ stat.test <- acc_time_lesion_df %>% rstatix::t_test(acc_time ~ feature, ref.grou
 p<-ggplot(acc_time_lesion_df, aes(x=reorder(feature, acc_time, FUN = median), y=acc_time)) + 
    geom_jitter(aes(colour = feature), show.legend = F, width = 0.10) + 
   geom_boxplot(show.legend = F, alpha = 0.2, outlier.alpha = 0) +
-  #scale_y_continuous(limits=c(-0.1,0.5)) +
-   #ggtitle("Feature Leison Analysis")  +
+  scale_y_continuous(limits=c(0,1)) +
   theme_cowplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-   ylab("GPS Prediciton Accuracy") + xlab("Feature Removed") + 
-  ggpubr::stat_pvalue_manual(
-    stat.test, label = "p.adj", 
-    y.position = 0.8,
-    remove.bracket = F,
-    step.increase = 0.1,
-    hide.ns = T
-    )
+    ylab("GPS Prediciton Accuracy") + xlab("Feature Removed") #+ 
+  # ggpubr::stat_pvalue_manual(
+  #   stat.test, label = "p.adj", 
+  #   y.position = 0.8,
+  #   remove.bracket = F,
+  #   step.increase = 0.1,
+  #   hide.ns = T
+  #   )
 p
+
+```
+```{r}
+subj_mins = gps_df_clean2 %>% group_by(IID) %>% dplyr::tally(name = "Days Collected")
+conf_scatter_plot(subj_minmissing, gps_ft_leison$MinsMissing$acc_subj, "MinsMissing")
 ```
 
 
