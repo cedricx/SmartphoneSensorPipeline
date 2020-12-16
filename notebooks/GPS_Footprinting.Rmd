@@ -124,7 +124,7 @@ ggplotly(p)
 Next, we are removing the days with excessive data missingness. This is of course an arbitrary step. Therefore we will conduct a sensitivity analysis of the missingness threshold we set by performing the analysis across multiple different thresholds. For now, the current sensitivity cutoff is set at `r sensitivity_cutoff`, which amounts to only excluding those with `r sensitivity_cutoff/1440*100`% of GPS missing.
 
 ```{r results='asis'}
-sensitivity_cutoff = 1440 # this controls the cutoff threshold
+sensitivity_cutoff = 1430 # this controls the cutoff threshold
 gps_df_clean2 = subset(gps_df_clean, MinsMissing < sensitivity_cutoff)
 ```
 
@@ -149,7 +149,7 @@ subj_minmissing = gps_df_clean2 %>% group_by(IID) %>% summarise(mean = mean(Mins
 subj_minmissing_plot = ggplot(subj_minmissing) + 
   geom_point(aes(x = reorder(IID, mean), y = (1440-mean)/(1440-1296))) + 
    theme_cowplot() + 
-  labs(title = "Data Completeness by Subject",part_times,"Data Partitions", 
+  labs(title = "Data Completeness by Subject", 
   x = "Subjects", y = "Data Completeness") + scale_y_continuous(labels = scales::percent, limits=c(0,1)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), plot.title = element_text(hjust = 0.5))
 ggplotly(subj_minmissing_plot)
@@ -163,15 +163,19 @@ To operationalize individual footprinting prediction, we randomly split each ind
 
 ```{r}
 set.seed(510)
-make_subj_seq = function(gps_df_clean2,part_times = 10) {
+make_subj_seq = function(gps_df_clean2,part_times) {
   subj_seq = list()
   for (subj in unique(gps_df_clean2$IID)){
+    print(subj)
     subj_data = subset(gps_df_clean2, IID==subj)
+    if (dim(subj_data)[1] >5) {
     subj_seq[[subj]] <-createDataPartition(subj_data$IID,times = part_times, p =0.5)
+    }
   }
   return(subj_seq)
 }
-subj_seq = make_subj_seq(gps_df_clean2, 100)
+part_times = 1000
+subj_seq = make_subj_seq(gps_df_clean2, part_times)
 
 ```
 
@@ -183,7 +187,7 @@ Here, similar to [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles
 
 ```{r example_cor_fig, fig.width=3, fig.width=3, fig.align="center"}
 # an example of subj 1, and first half
-example_data = gps_df_clean2[subj_seq$`14w5qlo8`$Resample001,3:17]
+example_data = gps_df_clean2[subj_seq$`16xv6ko1`$Resample0001,3:17]
 gps_cor = rquery.cormat(example_data, type = "full")
 
 ```
@@ -196,7 +200,8 @@ We then calculated the feature matrix for all `r length(unique(gps_df_clean2$IID
 make_feature_matrix = function(gps_df, subj_seq, range) {
   subj_mat_1 = list()
   subj_mat_2 = list()
-  for (subj in unique(gps_df$IID)){
+  for (subj in names(subj_seq)){
+    print(subj)
     subj_data = subset(gps_df, IID==subj)
     subj_mat_1[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[list,range], type = "flatten", graph = F)$r)
     subj_mat_2[[subj]] = lapply(subj_seq[[subj]], function(list) rquery.cormat(subj_data[-list,range], type = "flatten", graph = F)$r)
@@ -298,7 +303,7 @@ acc_time = calc_acc_time(match_cor, "max")
 Over the `r part_times` random splits, the mean match accuracy was `r round(mean(acc_time),4)*100`%, with a standard deviation of `r round(sd(acc_time),4)*100`%, high of `r round(max(acc_time),4)*100`%, and low of `r round(min(acc_time),4)*100`%, (95%CI: `r round(CI(acc_time)['lower'],2)`-`r round(CI(acc_time)['upper'],2)`).
 
 ```{r plot accuracy by partition histogram, fig.width=8, fig.height=4}
-p_time_cor = hist_chx(acc_time, bins = 15, title = paste("Covariance Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+p_time_cor = hist_chx(acc_time, bins = 16, title = paste("Covariance Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 ggplotly(p_time_cor)
 ```
 **Figure 7: Match accuracy distributon across `r part_times` data splits.** Mean match accuracy was `r round(CI(acc_time)['mean'],2)` (95%CI: `r round(CI(acc_time)['lower'],2)`-`r round(CI(acc_time)['upper'],2)`)
@@ -335,7 +340,7 @@ In addition to the match accuracy across subjects, we also calculated the match 
 
 ```{r plot accuracy by subjects, fig.width=8, fig.height=4}
 subj_scatter  = function(gps_df, acc_subj_vector, method){
-  subj_df <- data.frame(x=unique(gps_df$IID))
+  subj_df <- data.frame(x=names(subj_seq))
   subj_df$y = acc_subj_vector
   subj_df = subj_df[order(subj_df$y),]
   subj_acc_plot = ggplot(subj_df) + 
@@ -346,6 +351,8 @@ subj_scatter  = function(gps_df, acc_subj_vector, method){
    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), plot.title = element_text(hjust = 0.5))
   return(subj_acc_plot)
 }
+
+subj_acc_plot = subj_scatter(gps_df_clean2,acc_subj, "Correlated")
 
 ggplotly(subj_scatter(gps_df_clean2,acc_subj, "Correlated"))
 ```
@@ -365,13 +372,13 @@ for (i in 1:perm_time) {
   perm_part_times = 1
   print(paste("processing ...", i,"..."))
   gps_df_perm$IID = sample(gps_df_perm$IID)
-  perm_subj_seq = make_subj_seq(gps_df_perm,part_times = perm_part_times)
-  perm_gps = make_feature_matrix(gps_df_perm,perm_subj_seq)
+  perm_subj_seq = make_subj_seq(gps_df_perm, part_times = perm_part_times)
+  perm_gps = make_feature_matrix(gps_df_perm,perm_subj_seq,3:17)
   perm_mat_1 = perm_gps$subj_mat_1
   perm_mat_2 = perm_gps$subj_mat_2
   perm_match_cor = calc_match_cor(perm_mat_1,perm_mat_2)
-  perm_acc_time[[i]] = calc_acc_time(perm_match_cor,part_times = perm_part_times)
-  perm_acc_subj[[i]] = calc_acc_subj(perm_match_cor,part_times = perm_part_times)
+  perm_acc_time[[i]] = calc_acc_time(perm_match_cor)
+  perm_acc_subj[[i]] = calc_acc_subj(perm_match_cor)
 }
 ```
 
@@ -398,7 +405,7 @@ for (subj in subj_acc_plot$data$x) {
 ```
 
 ```{r plot subj analysis with perm, fig.width=8, fig.height=4}
-subj_df <- data.frame(x=unique(gps_df_clean2$IID))
+subj_df <- data.frame(x=names(subj_seq))
 subj_df$y = acc_subj
 subj_df$y_perm = unlist(perm_subj$acc)
 subj_df = subj_df[order(subj_df$y),]
@@ -540,23 +547,23 @@ calc_match_vector = function(subj_mat_1,subj_mat_2,method) {
 
 ```{r calc match accuracy using mean features}
 match_mean_rmse = calc_match_vector(gps_clean2_mean_feat$subj_mat_1,gps_clean2_mean_feat$subj_mat_2,"rmse")
-acc_time_mean_rmse = calc_acc_time(match_mean_rmse,part_times,"min")
-acc_subj_mean_rmse = calc_acc_subj(match_mean_rmse, part_times,"min")
+acc_time_mean_rmse = calc_acc_time(match_mean_rmse,"min")
+acc_subj_mean_rmse = calc_acc_subj(match_mean_rmse,"min")
 
 match_mean_cor = calc_match_vector(gps_clean2_mean_feat$subj_mat_1,gps_clean2_mean_feat$subj_mat_2,"cor")
-acc_time_mean_cor = calc_acc_time(match_mean_cor,part_times,"max")
-acc_subj_mean_cor = calc_acc_subj(match_mean_cor, part_times,"max")
+acc_time_mean_cor = calc_acc_time(match_mean_cor,"max")
+acc_subj_mean_cor = calc_acc_subj(match_mean_cor,"max")
 ```
 
 ```{r calc match accuracy using variability features}
 match_rmssd_rmse = calc_match_vector(gps_clean2_rmssd_feat$subj_mat_1,gps_clean2_rmssd_feat$subj_mat_2, "rmse")
-acc_time_rmssd_rmse = calc_acc_time(match_rmssd_rmse,part_times, "min")
-acc_subj_rmssd_rmse = calc_acc_subj(match_rmssd_rmse, part_times, "min")
+acc_time_rmssd_rmse = calc_acc_time(match_rmssd_rmse, "min")
+acc_subj_rmssd_rmse = calc_acc_subj(match_rmssd_rmse, "min")
 
 
 match_rmssd_cor = calc_match_vector(gps_clean2_rmssd_feat$subj_mat_1,gps_clean2_rmssd_feat$subj_mat_2, "cor")
-acc_time_rmssd_cor = calc_acc_time(match_rmssd_cor,part_times, "max")
-acc_subj_rmssd_cor = calc_acc_subj(match_rmssd_cor, part_times, "max")
+acc_time_rmssd_cor = calc_acc_time(match_rmssd_cor, "max")
+acc_subj_rmssd_cor = calc_acc_subj(match_rmssd_cor, "max")
 ```
 
 ### 11. Permutation Tests with New Features 
@@ -599,7 +606,7 @@ perm_vector = function(gps_df, perm_time, method_feature, method_match){
 ```{r run permutation for mean features match by cor, fig.width=6, message=FALSE, include=FALSE}
 perm_mean_cor = perm_vector(gps_df_clean2, 1000, "mean", "cor")
 
-p_time_mean_cor = hist_chx(acc_time_mean_cor, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(acc_time_mean),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+p_time_mean_cor = hist_chx(acc_time_mean_cor, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_mean_cor =  hist_chx(unlist(perm_mean_cor$perm_acc_time), bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(perm_mean_cor$perm_acc_time),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
 ```
@@ -613,7 +620,7 @@ p_time_mean_cor + q_time_mean_cor
 ```{r run permutation for mean features match by rmse, fig.width=6, message=FALSE, include=FALSE}
 perm_mean_rmse = perm_vector(gps_df_clean2, 1000, "mean", "rmse")
 
-p_time_mean_rmse = hist_chx(acc_time_mean_rmse, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(acc_time_mean),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+p_time_mean_rmse = hist_chx(acc_time_mean_rmse, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_mean_rmse =  hist_chx(unlist(perm_mean_rmse$perm_acc_time), bins = 8, title = paste("Mean Features: \n Average Accuracy Across",length(perm_mean_rmse$perm_acc_time),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
@@ -629,7 +636,7 @@ p_time_mean_rmse + q_time_mean_rmse
 ```{r run permutation for rmssd features matched by cor, fig.width=6, message=FALSE, include=FALSE}
 perm_rmssd_cor = perm_vector(gps_df_clean2, 1000, "rmssd","cor")
 
-p_time_rmssd_cor = hist_chx(acc_time_rmssd_cor, bins = 8, title = paste("RMSSD Features: \n Average Accuracy Across",length(acc_time_rmssd_cor),"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+p_time_rmssd_cor = hist_chx(acc_time_rmssd_cor, bins = 8, title = paste("RMSSD Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
 
 q_time_rmssd_cor = hist_chx(unlist(perm_rmssd_cor$perm_acc_time), bins = 8, title = paste("RMSSD Features: Average Accuracy Across",length(perm_rmssd_cor$perm_acc_time_cor),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
 ```
@@ -686,17 +693,17 @@ subj_scatter_perm = function(gps_df,acc_subj,perm_subj, method){
 
 
 ```{r mean features by subject with permutation, fig.width=8, fig.height=6}
-p_subj_mean = subj_scatter(gps_df_clean2, acc_subj_mean, "Mean")
-perm_subj_mean = combine_perm_subj(p_subj_mean,perm_mean$perm_acc_subj)
-p_subj_mean_perm = subj_scatter_perm(gps_df_clean2, acc_subj_mean, perm_subj_mean, "Mean")
+p_subj_mean = subj_scatter(gps_df_clean2, acc_subj_mean_cor, "Mean")
+perm_subj_mean = combine_perm_subj(p_subj_mean,perm_mean_cor$perm_acc_subj)
+p_subj_mean_perm = subj_scatter_perm(gps_df_clean2, acc_subj_mean_cor, perm_subj_mean, "Mean")
 ggplotly(p_subj_mean_perm)
 ```
 **Figure 14: Subject level prediction accuracy using mean features and matched by max pearson correlation**.
 
 ```{r rmssd features by subject with permutation, fig.width=8, fig.height=6}
-p_subj_rmssd = subj_scatter(gps_df_clean2, acc_subj_rmssd, "RMSSD")
-perm_subj_rmssd = combine_perm_subj(p_subj_rmssd,perm_rmssd$perm_acc_subj)
-p_subj_rmssd_perm = subj_scatter_perm(gps_df_clean2, acc_subj_rmssd, perm_subj_rmssd, "RMSSD")
+p_subj_rmssd = subj_scatter(gps_df_clean2, acc_subj_rmssd_cor, "RMSSD")
+perm_subj_rmssd = combine_perm_subj(p_subj_rmssd,perm_rmssd_cor$perm_acc_subj)
+p_subj_rmssd_perm = subj_scatter_perm(gps_df_clean2, acc_subj_rmssd_cor, perm_subj_rmssd, "RMSSD")
 ggplotly(p_subj_rmssd_perm)
 ```
 **Figure 15: Subject level prediction accuracy using RMSSD features and matched by max pearson correlation**.
@@ -773,8 +780,8 @@ for (subj in names(subj_mat_1)){
 
 ```{r match with combined features, fig.align="center", fig.height=3, fig.width=3}
 match_combined_feat = calc_match_vector(gps_clean2_combined_feat$subj_mat_1, gps_clean2_combined_feat$subj_mat_2, "cor")
-acc_time_cb  = calc_acc_time(match_combined_feat, part_times, "max")
-acc_subj_cb  = calc_acc_subj(match_combined_feat, part_times, "max")
+acc_time_cb  = calc_acc_time(match_combined_feat, "max")
+acc_subj_cb  = calc_acc_subj(match_combined_feat, "max")
 p = hist_chx(acc_time_cb, bins = 8, title = paste("Combined Features \n by data partition"), xaxis = "Prediction Accuracy", yaxis = "Count")
 q = hist_chx(acc_subj_cb, bins = 8, title = paste("Combined Features \n by subject"), xaxis = "Prediction Accuracy", yaxis = "Count")
 p
@@ -817,22 +824,21 @@ fviz_eig(als.pca) / fviz_eig(ari.pca)
 ```
 
 ```{r }
+als_ari_sum = lm(acc ~ sum_als + sum_ari + days , data = psych_sum)
 
+#als_fit = lm( acc ~ scale(pca_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+#summary(lm( acc ~ scale(als_AD) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum))$coefficients[2,4]
 
+#ari_fit = lm( acc ~ scale(pca_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
+#ari_als_fit = lm( acc ~ scale(pca_als) + scale(pca_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
 
-als_fit = lm( acc ~ scale(pca_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
-summary(lm( acc ~ scale(als_AD) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum))$coefficients[2,4]
-
-ari_fit = lm( acc ~ scale(pca_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
-ari_als_fit = lm( acc ~ scale(pca_als) + scale(pca_ari) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
-
-days_plot = visreg(als_fit, "days", gg = T, line=list(col="black")) + 
+days_plot = visreg(als_ari_sum, "days", gg = T, line=list(col="black")) + 
             ylab("GPS Footprint \n Prediction Accuracy") + xlab("Days Collected") +
             theme_cowplot() + stat_cor(method = "pearson")
-sum_als_plot = visreg(ari_als_fit, "sum_als", gg = T,  line=list(col="black")) + 
+sum_als_plot = visreg(als_ari_sum, "sum_als", gg = T,  line=list(col="black")) + 
             ylab("GPS Footprint \n Prediction Accuracy") + xlab("Affective Lability Score (ALS)") +
             theme_cowplot() + stat_cor(method = "pearson")
-sum_ari_plot = visreg(ari_als_fit, "sum_ari", gg = T, line=list(col="black")) + 
+sum_ari_plot = visreg(als_ari_sum, "sum_ari", gg = T, line=list(col="black")) + 
             ylab("GPS Footprint \n Prediction Accuracy") + xlab("Affective Reactivity Index (ARI)") +
             theme_cowplot() + stat_cor(method = "pearson")
 days_plot / sum_als_plot / sum_ari_plot

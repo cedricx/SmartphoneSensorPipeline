@@ -21,6 +21,7 @@ Affiliation: Penn Lifespan Informatics and Neuroimaging Center ([PennLINC](pennl
 require(reshape2)
 require(sna)
 require(tidyr)
+require(tidyverse)
 ```
 
 ```{r define paths}
@@ -76,8 +77,9 @@ for (subj in arrange(subj_days,`Days Collected`)$IID){
       half_1 = gps_clean2_feature$subj_mat_1[[subj]][[part]]$cor
       half_2 = gps_clean2_feature$subj_mat_2[[subj]][[part]]$cor
       half_1_half_2 = c(half_1,half_2)
-      gps_wide_matrix = rbind(gps_wide_matrix,half_1)
-      gps_wide_matrix = rbind(gps_wide_matrix,half_2)
+      #gps_wide_matrix = rbind(gps_wide_matrix,half_1)
+      #gps_wide_matrix = rbind(gps_wide_matrix,half_2)
+      gps_wide_matrix = rbind(gps_wide_matrix,half_1_half_2)
       }
     #}
 }
@@ -231,7 +233,7 @@ cor_perm = function(x, y, perm_time, method){
 fc_com_gps = function(subj_net_files_1,subj_net_files_2,atlas_now){
   atlas_path = "/Users/hxia/Documents/GitHub/xcpEngine/atlas"
   fc_com_1 = get_fc_com(atlas_now, subj_net = subj_net_files_1)
-  fc_com_2 = get_fc_com(atlas_now, subj_net = subj_net_files_2)
+  #fc_com_2 = get_fc_com(atlas_now, subj_net = subj_net_files_2)
   fc_com_corplot = sim_plots(subj_seq = gps_corplot$subj, ids,names(fc_com_1) , fc_com_1, fc_com_2)
   fc_com_cor_r = lapply(fc_com_corplot, function(atlas) atlas$sim_mat$r[lower.tri(atlas$sim_mat$r)])
   fc_com_gps_pvalue = unlist(sapply(fc_com_cor_r, function(atlas) suppressWarnings(cor.test(atlas, gps_corplot$r[lower.tri(gps_corplot$r)], method = "spearman")$p.value)))
@@ -241,7 +243,7 @@ fc_com_gps = function(subj_net_files_1,subj_net_files_2,atlas_now){
                           
   fc_com_gps_cor_df = data_frame(atlas = gsub("\\..*","",names(fc_com_gps_cor)), corr = fc_com_gps_cor, p_val = fc_com_gps_pvalue, p_perm = fc_com_gps_p_perm )
   fc_com_gps_cor_df$p_val_adj = p.adjust(fc_com_gps_cor_df$p_val,method = "bonferroni")
-  fc_com_gps_cor_df$p_perm_adj = p.adjust(fc_com_gps_cor_df$p_perm,method = "bonferroni")
+  fc_com_gps_cor_df$p_perm_adj = p.adjust(fc_com_gps_cor_df$p_perm,method = "fdr")
   fc_com_gps_cor_df$sig = fc_com_gps_cor_df$p_val_adj< 0.05
   fc_com_gps_cor_df$sig_perm = fc_com_gps_cor_df$p_perm_adj< 0.05
   p = ggplot(data=fc_com_gps_cor_df, aes(x=reorder(atlas, -corr), y=corr, fill = sig_perm)) +
@@ -250,6 +252,7 @@ fc_com_gps = function(subj_net_files_1,subj_net_files_2,atlas_now){
     ylab("FC-GPS Similarity Matrices Correlatons") + xlab("") + ggtitle(atlas_now) + theme(plot.title = element_text(hjust = 0.5))
   return(list(fc_corplot = fc_com_corplot, fc_gps_df = fc_com_gps_cor_df, plot = p, com_names = com_names))
 }
+
 ```
 
 
@@ -261,7 +264,7 @@ fc_schaef400_7_com_gps = fc_com_gps(subj_net_files_1,subj_net_files_2,"schaefer4
 fc_schaef400_7_com_gps$fc_corplot$`vis-dor`$plot
 ```
 
-```{r fig.height=6, fig.width=5}
+```{r fig.height=9, fig.width=5}
 fc_schaef200_7_com_gps$plot / fc_schaef400_7_com_gps$plot / fc_power_com_gps$plot
 ```
 
@@ -286,7 +289,6 @@ corrplot(com_gps_corr_mat, type="full",method="color", cl.lim = c(-0.2,0.2), tl.
 
 ```{r message=FALSE, warning=FALSE}
  fc_com_gps_out_corplot(fc_schaef200_7_com_gps, "schaef200")
-
 ```
 
 ```{r}
@@ -312,16 +314,23 @@ get_acc_finger = function(subj_net_files_1,subj_net_files_2){
     cor_match[[atlas]] = lapply(subj_net_files_atlas_1, function(subj_cor_1) sapply(subj_net_files_atlas_2, function(subj_cor_2) cor(subj_cor_1$V1, subj_cor_2$V1, use = "na.or.complete")))
     acc[atlas] = 0
     cor_list = list()
+    target_list = list()
+    match_list = list()
+    correct_list = list()
     for(subj in names(cor_match[[atlas]])) {
        position = which.max(unlist(cor_match[[atlas]][[subj]]))
        cor_list[[atlas]][[subj]] = max(unlist(cor_match[[atlas]][[subj]]))
        predicted_subj = subjects[position]
+       target_list[[atlas]][[subj]] = subj
+       match_list [[atlas]][[subj]] = predicted_subj
+       correct_list[[atlas]][[subj]] = F
        if (predicted_subj == subj) {
             acc[atlas]= acc[atlas] + 1
+            correct_list[[atlas]][[subj]] = T
           }
     }
     
-    cor_df[[atlas]] = data.frame(bblid = as.numeric(names(cor_list[[atlas]])), finger = unlist(cor_list[[atlas]]))
+    cor_df[[atlas]] = data.frame(target = unlist(target_list[[atlas]]), match = unlist(match_list[[atlas]]),  finger = unlist(cor_list[[atlas]]), correct = unlist(correct_list[[atlas]]))
     acc[atlas] = acc[atlas]/length(cor_match[[atlas]])
   }
     acc = acc[-1]
@@ -342,6 +351,100 @@ psych_sum_finger = inner_join(cor_df,psych_sum, by = c('bblid' = 'BBLID'))
 fit = lm( acc ~ finger +  sum_als + days, data = psych_sum_finger)
 summary(fit)
 ```
+
+
+```{r bootstrapping for fingerprint matching}
+get_acc_fc = function(target,database){
+  match_acc = 0
+  predicted_subj = list()
+  cor_match = lapply(target, function(subj_cor_1) sapply(database, function(subj_cor_2) cor(subj_cor_1$V1, subj_cor_2$V1, use = "na.or.complete")))
+  for (target_subj in names(target)){
+    predicted_subj[[target_subj]] = names(which.max(cor_match[[target_subj]]))
+    if (target_subj == predicted_subj[[target_subj]]){
+      match_acc = match_acc +1
+    }
+  }
+  match_df = data.frame(target = names(target), predict = unname(unlist(predicted_subj)))
+  match_df$correct = F
+  match_df$correct[which(names(target) == unname(unlist(predicted_subj)))] = T
+  match_acc = match_acc / length(target)
+  return(list(acc = match_acc, df = match_df))
+}
+
+
+bt_seqs = createDataPartition(1:41, times = 100, p= 0.666, list = T)
+acc_bt = list()
+
+for (atlas in atlases){
+  for (i in 1:length(bt_seqs)){
+      print(paste(atlas,i))
+      specific_bt = bt_seqs[[i]]
+      subj_net_bt_1 = subj_net_files_1[[atlas]][specific_bt]
+      subj_net_bt_2 = subj_net_files_2[[atlas]][specific_bt]
+      acc_bt[[atlas]][[i]] = get_acc_fc(subj_net_bt_1,subj_net_bt_2)
+    }
+  }
+}
+
+```
+
+```{r combine bootstrap results}
+fc_acc_all = lapply(acc_bt,function(atlas) sapply(atlas, function(bt) bt$acc))
+fc_acc_predict = lapply(acc_bt,function(atlas) t(sapply(atlas, function(bt) bt$df[,'predict'])))
+fc_acc_target = lapply(acc_bt,function(atlas) t(sapply(atlas, function(bt) bt$df[,'target'])))
+fc_acc_subj = lapply(acc_bt,function(atlas) t(sapply(atlas, function(bt) bt$df)))
+fc_acc_df = lapply(fc_acc_subj, function(atlas) data.frame(target = unlist(atlas[,"target"]),
+                                               correct = unlist(atlas[,"correct"])))
+fc_acc_subj_mean = lapply(fc_acc_df, function(atlas) atlas %>% group_by(target) %>% summarise(mean = mean(correct)))
+sapply(fc_acc_subj, function(atlas) )
+```
+
+```{r correlate fc subj acc with gps subj acc, fig.height=2, fig.width=2}
+atlas_now = "aal116"
+id_dict = data.frame(bblid = as.character(ids$BBLID), beiweid = as.character(ids$beiweID))
+fc_acc_subj_atlas = data.frame(bblid = fc_acc_subj_mean[[atlas_now]]$target, fc_acc = fc_acc_subj_mean[[atlas_now]]$mean)
+fc_acc_subj_atlas = inner_join(id_dict,fc_acc_subj_atlas)
+
+gps_fc_acc_atlas = inner_join(fc_acc_subj_atlas, psych_sum, by = c("beiweid" = "beiweID"))
+
+fit = lm(fc_acc ~ acc + admin_age + admin_sex + days, data = gps_fc_acc_atlas)
+visreg(fit,"acc")
+```
+```{r}
+atlas_now = "schaefer200x7"
+fc_com_1  = get_fc_com(atlas_now, subj_net_files_1)
+fc_com_2  = get_fc_com(atlas_now, subj_net_files_2)
+acc_com = get_acc_fc(fc_com_1,fc_com_2)
+for (i in 1:length(bt_seqs)){
+    specific_bt = bt_seqs[[i]]
+    subj_net_bt_1 = subj_net_files_1[[atlas_now]][specific_bt]
+    subj_net_bt_1_atlas = list()
+    subj_net_bt_1_atlas[[atlas_now]] = subj_net_bt_1
+    subj_net_bt_2 = subj_net_files_2[[atlas_now]][specific_bt]
+    subj_net_bt_2_atlas = list()
+    subj_net_bt_2_atlas[[atlas_now]] = subj_net_bt_2
+    
+    fc_com_1  = get_fc_com(atlas_now, subj_net_bt_1_atlas)
+    fc_com_1  = get_fc_com(atlas_now, subj_net_bt_2_atlas)
+    
+    
+    acc_bt[[atlas]][[i]] = get_acc_fc(subj_net_bt_1,subj_net_bt_2)
+  }
+}
+
+
+
+single_multi_acc_com_df = data.frame(atlas = names(single_multi_acc_com$acc), accuracy = single_multi_acc_com$acc, FC_GPS_sig = fc_schaef400_7_com_gps$fc_gps_df$sig == T)
+p = ggplot(data=single_multi_acc_com_df, aes(x=reorder(atlas, accuracy), y=accuracy, fill = FC_GPS_sig)) +
+    geom_bar(stat="identity") +
+    theme_cowplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+    ylab("FC Fingerprint Accuracy") + xlab("")
+
+return(list(df = single_multi_acc_com_df, plot = p))
+}
+```
+
+
 
 
 ### 8. Permutation Test for Matching
@@ -448,3 +551,20 @@ s400_fc_com_mean_1_gps = lapply(s400_fc_com_mean_1, function(net) inner_join(psy
   single_multi_acc_com_df = data.frame(atlas = names(single_multi_acc_com$acc), accuracy = single_multi_acc_com$acc, FC_GPS_sig = 
 ```
 
+```{r fig.height=2, fig.width=7}
+com_com_400 = list()
+for (com_com in names(which(fc_schaef400_7_com_gps$fc_gps_df$sig_perm == T))) {
+  com_com_df = data.frame(fc = fc_schaef400_7_com_gps$fc_corplot[[com_com]]$sim_mat$r[lower.tri(fc_schaef400_7_com_gps$fc_corplot[[com_com]]$sim_mat$r)],gps = gps_corplot$r[lower.tri(gps_corplot$r)])
+  com_com_400[[com_com]] = ggplot(com_com_df, aes(x = fc, y = gps)) + geom_bin2d(bins=50) + theme_cowplot() + xlab(paste(com_com,"(FC)")) + ylab(paste(com_com,"(GPS)"))
+}
+Reduce(`+`, com_com_400)
+```
+
+```{r fig.height=4, fig.width=7}
+com_com_200 = list()
+for (com_com in names(which(fc_schaef200_7_com_gps$fc_gps_df$sig_perm == T))) {
+  com_com_df = data.frame(fc = fc_schaef200_7_com_gps$fc_corplot[[com_com]]$sim_mat$r[lower.tri(fc_schaef200_7_com_gps$fc_corplot[[com_com]]$sim_mat$r)],gps = gps_corplot$r[lower.tri(gps_corplot$r)])
+  com_com_200[[com_com]] = ggplot(com_com_df, aes(x = fc, y = gps)) + geom_bin2d(bins=50) + theme_cowplot() + xlab(paste(com_com,"(FC)")) + ylab(paste(com_com,"(GPS)"))
+}
+Reduce(`+`, com_com_200)
+```
