@@ -92,6 +92,7 @@ The first step before further analysis is to exclude data points (days) that had
 
 ```{r echo=TRUE, fig.height=4, fig.width=10, message=FALSE, warning=FALSE}
 p=minMiss_histplot(gps_df,200, "All Data")
+
 ggplotly(p)
 ```
 **Figure 2: Minutes missing for all collected days.** There are `r dim(gps_df)[1]` total days. Dashlines indicate the corresponding percentile.
@@ -458,7 +459,7 @@ for (subj in unique(gps_df$IID)) {
 
 mean_plots = list()
 for (gps_ft in colnames(gps_df_clean[3:17])){
-  mean_plots[[gps_ft]] = hist_chx(sapply(mean_df, function(df) df[1,gps_ft]), title = gps_ft, xaxis = "Feature Mean", yaxis = "count")
+  mean_plots[[gps_ft]] = hist_chx(sapply(mean_df, function(df) df[1,gps_ft]), title = gps_ft, xaxis = "Mean", yaxis = "count")
 }
 
 Reduce(`+`, mean_plots)
@@ -503,7 +504,7 @@ for (subj in unique(gps_df$IID)) {
 
 var_plots = list()
 for (gps_ft in colnames(gps_df_clean[3:17])){
-  var_plots[[gps_ft]] = hist_chx(sapply(var_df, function(df) df[1,gps_ft]), title = gps_ft, xaxis = "Feature Variability(RMSSD)", yaxis = "count")
+  var_plots[[gps_ft]] = hist_chx(sapply(var_df, function(df) df[1,gps_ft]), title = gps_ft, xaxis = "Variability(RMSSD)", yaxis = "count")
 }
 
 Reduce(`+`, var_plots)
@@ -583,20 +584,31 @@ perm_vector = function(gps_df, perm_time, method_feature, method_match){
       perm_gps = make_feature_rmssd(gps_df_perm,perm_subj_seq)
     } else if (method_feature == "mean"){
       perm_gps = make_feature_mean(gps_df_perm,perm_subj_seq)
+    } else if (method_feature == "combined"){
+      perm_gps_rmssd = make_feature_rmssd(gps_df_perm,perm_subj_seq)
+      perm_gps_mean = make_feature_mean(gps_df_perm,perm_subj_seq)
+      perm_gps_cor = make_feature_matrix(gps_df_perm,perm_subj_seq,3:17)
+      subj_mat_1 = list()
+      subj_mat_2 = list()
+      for (subj in names(perm_gps_cor$subj_mat_1)){
+          #print(subj)
+          subj_mat_1[[subj]]$Resample1 = as.numeric( c(value(perm_gps_rmssd$subj_mat_1[[subj]][[1]]),value(perm_gps_mean$subj_mat_1[[subj]][[1]]),perm_gps_cor$subj_mat_1[[subj]][[1]]$cor))
+          subj_mat_2[[subj]]$Resample1 = as.numeric( c(value(perm_gps_rmssd$subj_mat_2[[subj]][[1]]),value(perm_gps_mean$subj_mat_2[[subj]][[1]]),perm_gps_cor$subj_mat_2[[subj]][[1]]$cor))
+      }
+      perm_gps = list(subj_mat_1 = subj_mat_1, subj_mat_2 = subj_mat_2)
     }
     perm_mat_1 = perm_gps$subj_mat_1
     perm_mat_2 = perm_gps$subj_mat_2
     if (method_match == "cor") {
       perm_match = calc_match_vector(perm_mat_1,perm_mat_2, "cor")
-      perm_acc_time[[i]] = calc_acc_time(perm_match,part_times = perm_part_times, "max")
-      perm_acc_subj[[i]] = calc_acc_subj(perm_match,part_times = perm_part_times, "max")
+      perm_acc_time[[i]] = calc_acc_time(perm_match, "max")
+      perm_acc_subj[[i]] = calc_acc_subj(perm_match, "max")
     }
     else if (method_match == "rmse"){
       perm_match = calc_match_vector(perm_mat_1,perm_mat_2, "rmse")
-      perm_acc_time[[i]] = calc_acc_time(perm_match,part_times = perm_part_times, "min")
-      perm_acc_subj[[i]] = calc_acc_subj(perm_match,part_times = perm_part_times, "min")
+      perm_acc_time[[i]] = calc_acc_time(perm_match,"min")
+      perm_acc_subj[[i]] = calc_acc_subj(perm_match,"min")
     }
-    
   }
   return(list(perm_acc_time= perm_acc_time,perm_acc_subj = perm_acc_subj))
 }
@@ -735,7 +747,7 @@ conf_scatter_plot = function(conf_var, acc_subj, col){
    conf.int = TRUE # Add confidence interval
    ) + stat_cor(method = "pearson") +
     theme_cowplot() + theme(plot.title = element_text(hjust = 0.5)) +
-    labs(title = paste(col), y = "Prediction Accuracy", x = col)
+    labs(title = paste(col), y = "GPS Footprint \n Prediction Accuracy", x = col)
   return(conf_scatter)
   }
 
@@ -745,6 +757,8 @@ for (gps_ft in colnames(subj_minmissing)[-1]){
   sp_plots[[gps_ft]] = conf_scatter_plot(subj_minmissing,acc_subj,gps_ft)
 }
 
+sp_plots_pvals = sapply(sp_plots,function(plot) cor.test(plot$data[,1],sp_plots$Hometime$data[,2])$p.value)
+sp_plots_pvals_fdr = p.adjust(sp_plots_pvals,method = "fdr")
 Reduce(`+`, sp_plots)
 ```
 **Figure 18: Relationships between subject level prediction accuracy and individual features**. Notably, there was no relationship between individual data missingness and subject level prediction accuracy.
@@ -753,13 +767,21 @@ Reduce(`+`, sp_plots)
 ```{r accuracy explained by data amount}
 subj_days = gps_df_clean2 %>% group_by(IID) %>% dplyr::tally(name = "Days Collected")
 conf_scatter_plot(subj_days, acc_subj, "Days Collected")
+
+#permutation
+days_acc_df = data.frame(acc = acc_subj, days = subj_days$`Days Collected`)
+days_acc_perm_r = c()
+for (i in 1:1000000){
+  acc_subj_perm = value(acc_subj[sample(length(acc_subj))])
+  days_acc_perm_r[i] = cor(subj_days$`Days Collected`,acc_subj_perm)
+}
+
 ```
 **Figure 19: Relationships between subject level prediction accuracy and data quantity**. 
 
 
 ### 14. Combine Features
 ```{r combine features}
-
 gps_clean2_combined_feat = list()
 for (subj in names(subj_mat_1)){
   for (time in 1:part_times){
@@ -787,6 +809,18 @@ q = hist_chx(acc_subj_cb, bins = 8, title = paste("Combined Features \n by subje
 p
 ```
 **Figure 20: Prediction accuracy when all three sets of features were combined**. 
+
+```{r run permutation for combined features, fig.width=6, message=FALSE, include=FALSE}
+perm_cb_cor = perm_vector(gps_df_clean2, 1000, "combined", "cor")
+p_subj_cb = subj_scatter(gps_df_clean2, acc_subj_cb, "Combined")
+
+perm_subj_cb = combine_perm_subj(p_subj_cb,perm_cb_cor$perm_acc_subj)
+
+p_time_mean_rmse = hist_chx(acc_time_cb, bins = 8, title = paste("Mean Features: \n Average Accuracy Across",part_times,"Data Partitions"), xaxis = "Prediction Accuracy", yaxis = "Count")
+
+q_time_cb_cor =  hist_chx(unlist(perm_cb_cor$perm_acc_time), bins = 8, title = paste("All Features: \n Average Accuracy Across",length(perm_mean_rmse$perm_acc_time),"Permutations"), xaxis = "Prediction Accuracy", yaxis = "Count")
+
+```
 
 
 ### 15. Associations with Psychopathology
@@ -842,6 +876,23 @@ sum_ari_plot = visreg(als_ari_sum, "sum_ari", gg = T, line=list(col="black")) +
             ylab("GPS Footprint \n Prediction Accuracy") + xlab("Affective Reactivity Index (ARI)") +
             theme_cowplot() + stat_cor(method = "pearson")
 days_plot / sum_als_plot / sum_ari_plot
+```
+
+```{r psychopathology permutation}
+#permutation
+als_ari_perm_r = c()
+for (i in 1:1000){
+  psych_sum_perm = psych_sum
+  psych_sum_perm$als_perm = psych_sum$sum_als[sample(length(psych_sum$sum_als))]
+  als_ari_perm_r[i] = summary(lm(acc ~ als_perm + sum_ari + days , data = psych_sum_perm))[[8]]
+}
+
+```
+
+```{r }
+mod <- lm(acc~sum_als*sum_ari + days , data=psych_sum)  # just raw scores, no residuals
+als_int_plot <- visreg(mod,xvar="sum_als",by="sum_ari",overlay=TRUE,strip.names=TRUE)
+visreg(mod,xvar="sum_ari",by="sum_als",overlay=TRUE)
 ```
 **Figure 21: Associations between irritability and prediction accuracy**. 
 
@@ -957,28 +1008,54 @@ fviz_pca_biplot(res.pca, repel = TRUE,
                 col.ind = "#696969"  # Individuals color
                 )
 ```
+
 ### 19.Feature Leison
 
 ```{r feature leison experiment, message=FALSE, warning=FALSE}
 feat_names = names(gps_df_clean2[,3:17])
+subj_seq_100 = make_subj_seq(gps_df_clean2, 10)
 gps_ft_leison = list()
+gps_df_perm = gps_df_clean2
+perm_time_cut = 10
+perm_acc_time_cut = list()
+perm_acc_subj_cut = list()
 for (i in 1:15){
   ft_rmv = feat_names[i]
   print(ft_rmv)
   range = c(3:17)[-i]
   print(range)
-  feature_nd = make_feature_matrix(gps_df_clean2,subj_seq,range)
+  # original data
+  feature_nd = make_feature_matrix(gps_df_clean2,subj_seq_100,range)
   match_cor_nd = calc_match_cor(feature_nd$subj_mat_1,feature_nd$subj_mat_2)
   gps_ft_leison[[ft_rmv]]$acc_time = calc_acc_time(match_cor_nd, "max")
   gps_ft_leison[[ft_rmv]]$acc_subj = calc_acc_subj(match_cor_nd, "max")
   print(mean(gps_ft_leison[[ft_rmv]]$acc_time))
 }
-
+  #permutation data
+for (i in 1:15){
+  ft_rmv = feat_names[i]
+  print(ft_rmv)
+  range = c(3:17)[-i]
+  print(range)
+  for (j in 1:perm_time_cut) {
+    perm_part_times = 1
+    print(paste("permuting ...", i,"..."))
+    gps_df_perm$IID = sample(gps_df_perm$IID)
+    perm_subj_seq = make_subj_seq(gps_df_perm, part_times = perm_part_times)
+    perm_gps = make_feature_matrix(gps_df_perm,perm_subj_seq,range)
+    perm_mat_1 = perm_gps$subj_mat_1
+    perm_mat_2 = perm_gps$subj_mat_2
+    perm_match_cor = calc_match_cor(perm_mat_1,perm_mat_2)
+    perm_acc_time_cut[[ft_rmv]][[j]] = calc_acc_time(perm_match_cor)
+    perm_acc_subj_cut[[ft_rmv]][[j]] = calc_acc_subj(perm_match_cor)
+  }
+  print(mean(unlist(perm_acc_time_cut[[ft_rmv]])))
+}
 ```
 
 ```{r gps_lesion_df}
 acc_time_lesion_df = as.data.frame(sapply(gps_ft_leison, function(lesion) lesion$acc_time))
-acc_time_lesion_df$`None_Removed` = acc_time
+acc_time_lesion_df$`None_Removed` = acc_time[1:10]
 acc_time_lesion_df <- as.data.frame(gather(acc_time_lesion_df, feature, acc_time, colnames(acc_time_lesion_df), factor_key=TRUE))
 
 stat.test <- acc_time_lesion_df %>% rstatix::t_test(acc_time ~ feature, ref.group = "None_Removed", p.adjust.method = "bonferroni")
@@ -988,7 +1065,7 @@ p<-ggplot(acc_time_lesion_df, aes(x=reorder(feature, acc_time, FUN = median), y=
   geom_boxplot(show.legend = F, alpha = 0.2, outlier.alpha = 0) +
   scale_y_continuous(limits=c(0,1)) +
   theme_cowplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-    ylab("GPS Prediciton Accuracy") + xlab("Feature Removed") #+ 
+    ylab("GPS Footprint Prediciton Accuracy") + xlab("Feature Removed") #+ 
   # ggpubr::stat_pvalue_manual(
   #   stat.test, label = "p.adj", 
   #   y.position = 0.8,
@@ -999,6 +1076,31 @@ p<-ggplot(acc_time_lesion_df, aes(x=reorder(feature, acc_time, FUN = median), y=
 p
 
 ```
+
+```{r gps_lesion_perm}
+acc_time_lesion_perm_df = as.data.frame(sapply(perm_acc_time_cut, function(lesion) unlist(lesion)))
+acc_time_lesion_perm_df$`None_Removed` = perm_acc_time_all[1:10]
+acc_time_lesion_perm_df <- as.data.frame(gather(acc_time_lesion_perm_df, feature, acc_time, colnames(acc_time_lesion_perm_df), factor_key=TRUE))
+
+stat.test.perm <- acc_time_lesion_perm_df %>% rstatix::t_test(acc_time ~ feature, ref.group = "None_Removed", p.adjust.method = "bonferroni")
+
+p_perm<-ggplot(acc_time_lesion_perm_df, aes(x=reorder(feature, acc_time, FUN = median), y=acc_time)) + 
+   geom_jitter(aes(colour = feature), show.legend = F, width = 0.10) + 
+  geom_boxplot(show.legend = F, alpha = 0.2, outlier.alpha = 0) +
+  scale_y_continuous(limits=c(0,1)) +
+  theme_cowplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+    ylab("GPS Footprint Prediciton Accuracy") + xlab("Feature Removed") #+ 
+  # ggpubr::stat_pvalue_manual(
+  #   stat.test, label = "p.adj", 
+  #   y.position = 0.8,
+  #   remove.bracket = F,
+  #   step.increase = 0.1,
+  #   hide.ns = T
+  #   )
+p_perm
+```
+
+
 ```{r}
 subj_mins = gps_df_clean2 %>% group_by(IID) %>% dplyr::tally(name = "Days Collected")
 conf_scatter_plot(subj_minmissing, gps_ft_leison$MinsMissing$acc_subj, "MinsMissing")
