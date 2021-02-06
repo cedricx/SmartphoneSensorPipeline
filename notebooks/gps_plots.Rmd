@@ -71,6 +71,137 @@ dev.off()
 ```
 
 
+```{r visualizaiton of GPS metrics over time}
+gps_m_df = gps_df_clean
+gps_m_df$Date_Number 
+subj_m_days = gps_m_df %>% group_by(IID) %>% dplyr::tally(name = "Days")
+subj_m_first_date = gps_m_df %>% group_by(IID) %>% slice(1)
+subj_m_first_date$Days = subj_m_days$Days
+
+gps_m_df$day_number = unlist(sapply(subj_m_days$Days, function(day) 1:day))
+gps_m_df$has_data = 1
+
+
+plot_subj_m = function(subj_i, metric){
+  metric_max = max(gps_m_df[metric],na.rm = T)
+  metric_min = min(gps_m_df[metric],na.rm = T)
+  gps_m_df_subj = subset(gps_m_df, IID == subj_i)
+  metric_num = which(colnames(gps_m_df_subj) == metric)
+  metric_col = rainbow_hcl(15)[metric_num-2]
+  gps_m_df_subj_metric = data_frame(x = gps_m_df_subj$day_number, y = gps_m_df_subj[,metric_num],Date = gps_m_df_subj$Date)
+  #subj_m_plot = ggplot(gps_m_df_subj_metric, aes(x=x, y=y)) + 
+  subj_m_plot = ggplot(gps_m_df_subj_metric, aes(x=Date, y=y)) + 
+    geom_line(colour=metric_col) + 
+    #geom_point(size = 0.5) + 
+    #xlim(0,134)+
+    #ylim(metric_min,metric_max) +
+    #guides(color=guide_legend(title="")) + 
+    theme_void() +
+    #theme_cowplot() + 
+    #xlab(subj_i) + 
+    xlab("") +
+    #theme(legend.position = "none", axis.ticks.y = element_blank(), axis.title.y = element_blank(), axis.text.y = element_blank(),panel.grid = element_blank(),panel.background = element_blank()) + 
+    scale_x_date(date_labels = "%m-%d-%y",limits = c(as.Date("2019-12-15"),as.Date("2020-05-01")), date_breaks = "1 month", date_minor_breaks = "2 week")
+    #theme(legend.text=element_text(size=rel(1)))
+  return(subj_m_plot)
+}
+
+subj_date_order = subj_m_first_date$IID[order(subj_m_first_date$Date,subj_m_first_date$Days)]
+subj_m_plots = lapply(subj_date_order, function(subj) plot_subj_m(subj, "has_data"))
+subj_m_plots[[43]] =  plot_subj_m(subj_date_order[41], "has_data")
+  
+pdf(file.path(output_path,paste0("subj_metric_date.pdf")),height = 7,width = 7)
+  do.call("grid.arrange", c(subj_m_plots, ncol=1, top = metric))
+dev.off()
+
+
+
+subj_day_order = subj_m_days$IID[order(subj_m_days$Days)]
+metrics = colnames(gps_df)[-c(1,2)]
+for (metric in metrics){
+  pdf(file.path(output_path,paste0("subj_metric_",metric,".pdf")),height = 4,width = 6)
+  subj_m_plots = lapply(subj_day_order, function(subj) plot_subj_m(subj, metric))
+  do.call("grid.arrange", c(subj_m_plots, ncol=1, top = metric, bottom = "Time(day)"))
+  dev.off()
+}
+
+subjs = subj_day_order
+for (subj_i in subjs){
+  subj_a_plots = lapply(metrics, function(metric) plot_subj_m(subj_i, metric))
+  plot_width = 6/134*max(subj_a_plots[[1]]$data$x)
+  pdf(file.path(output_path,paste0("subj_all_metrics_",subj_i,".pdf")),height = 4,width = plot_width)
+  do.call("grid.arrange", c(subj_a_plots, ncol=1, top = subj_i, bottom = "Time(day)"))
+  dev.off()
+}
+
+#just_ticks = plot_subj_m(subj, metric)
+subj = "7fpv77ag"
+subj_a_plots = lapply(metrics, function(metric) plot_subj_m(subj, metric))
+subj_a_plots[[16]] = just_ticks
+do.call("grid.arrange", c(subj_a_plots, ncol=1, top = subj))
+
+
+subj_all_m_func = function(subj){
+  subj_a_plots = lapply(metrics, function(metric) plot_subj_m(subj, metric))
+  marrangeGrob(grobs = subj_a_plots, ncol=1,nrow=length(metrics), top = subj)
+}
+
+all_subj_all_m_plots = lapply(subjs, subj_all_m_func)
+
+
+
+```
+
+```{r covid analysis}
+covid_acc_time = data.frame(All = acc_time_all, `Pre-Covid` = acc_time_31020, Covid = acc_time_covid)
+covid_acc_time_long <- gather(covid_acc_time, dataset, acc_time, All:Covid, factor_key=TRUE)
+
+x_tick_label = c("All","Pre-Covid","Covid")
+x_tick_labels = paste0(x_tick_label," (",c(sum(subj_days_all$days),sum(subj_days_31020$days),sum(subj_days_covid$days))," days)")
+ggplot(covid_acc_time_long, aes(x= dataset, y = acc_time)) + 
+  geom_jitter(width = 0.2) + 
+  xlab("") +
+  ylab("Individual GPS Footprint \n Identification Accuracy") +
+  scale_x_discrete(labels=x_tick_labels) +
+  geom_boxplot(show.legend = F, alpha = 0.2, outlier.alpha = 0) + 
+  theme_cowplot()
+
+covid_subj = unique(gps_df_clean2_covid$IID)
+acc_subj_all[covid_subj]
+covid_acc_subj = data.frame(all = acc_subj_all[covid_subj], precovid = acc_subj_31020[covid_subj], covid = acc_subj_covid[covid_subj])
+covid_acc_subj_long = covid_acc_subj %>% gather(dataset, acc_subj, all:covid, factor_key = T)
+covid_acc_subj_long$subj = covid_subj
+
+ggplot(covid_acc_subj_long, aes(fill=subj, y=acc_subj, x=dataset)) + 
+    geom_bar(position="dodge", stat="identity") + 
+    theme_cowplot() + 
+    xlab("") +
+    ylab("Individual GPS Footprint \n Identification Accuracy")
+
+covid_gps_df = subset(gps_df_clean2_all, IID %in% covid_subj)
+covid_gps_df[,3:17] = apply(covid_gps_df[3:17], 2, function(x) x/max(x))
+
+covid_gps_df_long <- as.data.frame(gather(covid_gps_df, feature, value, Hometime:WkEndDayRtn, factor_key=TRUE))
+
+
+
+ggplot(subset(covid_gps_df_long, Date <=  as.Date("2020-3-10")), aes(x=feature, y=value)) + 
+   geom_boxplot(aes(colour = feature), show.legend = F, width = 0.10, outlier.alpha = 0) + theme_cowplot() + ylab("Relative Value") + xlab("") + theme(axis.text.x = element_text(angle = 45))
+
+ggplot(subset(covid_gps_df_long, Date > as.Date("2020-3-10")), aes(x=feature, y=value)) +
+   geom_boxplot(aes(colour = feature), show.legend = F, width = 0.10, outlier.alpha = 0) + theme_cowplot() + ylab("Relative Value") + xlab("") + theme(axis.text.x = element_text(angle = 45))
+
+ggplot(covid_gps_df_long, aes(x=feature, y=value)) + 
+   geom_boxplot(aes(colour = feature), show.legend = F, width = 0.10, outlier.alpha = 0) + theme_cowplot() + ylab("Relative Value") + xlab("") + theme(axis.text.x = element_text(angle = 45))
+
+
+
+```
+
+
+
+
+
 ```{r plot similarity matrix no ranking}
 gps_wide_matrix = data.frame()
 
@@ -164,9 +295,9 @@ pdf(file.path(paste0(output_path,"cov_hist_perm",sen,".pdf")),height = 4,width =
 p
 dev.off()
 ```
-`
 
-``{r plot subj analysis with perm, fig.width=8, fig.height=4}
+
+```{r plot subj analysis with perm, fig.width=8, fig.height=4}
 subj_df <- data.frame(x=names(subj_seq))
 subj_df$y = acc_subj
 subj_df$y_perm = unlist(perm_subj$acc)
@@ -260,6 +391,7 @@ pdf(file.path(paste0(output_path,"Combined_subj_",sen,".pdf")),height = 4,width 
 p_subj_cor_perm
 dev.off()
 ```
+
 ```{r all different features combined}
 df_diff_time = data.frame(cov = acc_time, mean = acc_time_mean_cor, rmssd = acc_time_rmssd_cor, cb = acc_time_cb)
 df_diff_time_long = gather(df_diff_time, feature, accuracy, cov:cb, factor_key=TRUE)
@@ -510,4 +642,351 @@ pdf(file.path(paste0(output_path,"lesion_perm",sen,".pdf")),height = 5,width = 8
 p_perm
 dev.off()
 ```
+
+
+```{r histogram prediction with acc}
+df = data.frame(val = acc_acc_time)
+p = ggplot(df, aes(x=val)) + 
+    geom_histogram(bins = 15, fill = "#F69274", size = 2) + 
+    theme_cowplot() +
+    labs(title=paste("Accelerometer Features: \n Average Accuracy Across",part_times,"Data Partitions"),
+         x  = "Mobility Footprint Individual Identification Accuracy", y = "Count") + 
+  #geom_density(alpha=.2) +
+    theme(plot.title = element_text(hjust = 0.5))
+
+p = p + geom_vline(aes(xintercept=mean(val)),
+            color="black", linetype="dashed")
+p
+pdf(file.path(paste0(output_path,"acc_hist",sen,".pdf")),height = 4,width = 5)
+p
+dev.off()
+```
+
+
+```{r histogram prediction permutation with acc}
+df = data.frame(val = perm_acc_acc_time)
+p = ggplot(df, aes(x=val)) + 
+    geom_histogram(bins = 5, fill = "#9ECAE1", size = 2) + 
+    theme_cowplot() +
+    labs(title=paste("Accelerometer Features: \n Average Accuracy Across",perm_time,"Permutations"),
+         x  = "Mobility Footprint Individual Identification Accuracy", y = "Count") + 
+  #geom_density(alpha=.2) +
+    theme(plot.title = element_text(hjust = 0.5))
+
+p = p + geom_vline(aes(xintercept=mean(val)),
+            color="black", linetype="dashed")
+p
+pdf(file.path(paste0(output_path,"acc_hist_perm",sen,".pdf")),height = 4,width = 5)
+p
+dev.off()
+```
+
+
+```{r plot subj analysis with perm with acc, fig.width=8, fig.height=4}
+subj_df <- data.frame(x=names(acc_subj_seq))
+subj_df$y = acc_acc_subj
+acc_perm_subj = combine_perm_subj(names(acc_subj_seq),perm_acc_acc_subj)
+subj_df$y_perm = unlist(acc_perm_subj$acc)
+subj_df = subj_df[order(subj_df$y),]
+p_subj_cor_perm = ggplot(subj_df, aes(x = reorder(x, y), y = value)) + 
+  geom_point(aes(y = y), color = "#F69274", size = 2) + 
+  geom_point(aes(y = y_perm), color = "#9ECAE1", size =2 ) +
+  theme_cowplot() + 
+  labs(title = paste("Acc Features \n Subject Level Accuracy Across",part_times,"Data Partitions"), 
+       x = "Subjects", y = "Mobility Footprint Individual Identification Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), plot.title = element_text(hjust = 0.5))
+
+pdf(file.path(paste0(output_path,"acc_subj",sen,".pdf")),height = 4,width = 5)
+p_subj_cor_perm
+dev.off()
+```
+
+
+```{r histogram prediction with acc+gps}
+df = data.frame(val = acc_time_cb_accgps)
+p = ggplot(df, aes(x=val)) + 
+    geom_histogram(bins = 15, fill = "#F69274", size = 2) + 
+    theme_cowplot() +
+    labs(title=paste("GPS+ACC Features: \n Average Accuracy Across",part_times,"Data Partitions"),
+         x  = "Mobility Footprint Individual Identification Accuracy", y = "Count") + 
+  #geom_density(alpha=.2) +
+    theme(plot.title = element_text(hjust = 0.5))
+
+p = p + geom_vline(aes(xintercept=mean(val)),
+            color="black", linetype="dashed")
+p
+pdf(file.path(paste0(output_path,"acc+gps_hist",sen,".pdf")),height = 4,width = 5)
+p
+dev.off()
+```
+
+
+```{r histogram prediction permutation with acc+gps}
+df = data.frame(val = unlist(perm_acc_gps_time))
+p = ggplot(df, aes(x=val)) + 
+    geom_histogram(bins = 5, fill = "#9ECAE1", size = 2) + 
+    theme_cowplot() +
+    labs(title=paste("GPS+ACC Features: \n Average Accuracy Across",perm_time,"Permutations"),
+         x  = "Mobility Footprint Individual Identification Accuracy", y = "Count") + 
+  #geom_density(alpha=.2) +
+    theme(plot.title = element_text(hjust = 0.5))
+
+p = p + geom_vline(aes(xintercept=mean(val)),
+            color="black", linetype="dashed")
+p
+pdf(file.path(paste0(output_path,"acc+gps_hist_perm",sen,".pdf")),height = 4,width = 5)
+p
+dev.off()
+```
+
+
+```{r plot subj analysis with perm with acc+gps, fig.width=8, fig.height=4}
+subj_df <- data.frame(x=names(acc_subj_seq))
+subj_df$y = acc_subj_cb_accgps
+perm_subj = combine_perm_subj(names(acc_subj_seq),perm_acc_gps_subj)
+subj_df$y_perm = unlist(perm_subj$acc)
+subj_df = subj_df[order(subj_df$y),]
+p_subj_cor_perm = ggplot(subj_df, aes(x = reorder(x, y), y = value)) + 
+  geom_point(aes(y = y), color = "#F69274", size = 2) + 
+  geom_point(aes(y = y_perm), color = "#9ECAE1", size =2 ) +
+  theme_cowplot() + 
+  labs(title = paste("Acc+GPS Features \n Subject Level Accuracy Across",part_times,"Data Partitions"), 
+       x = "Subjects", y = "Mobility Footprint Individual Identification Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), plot.title = element_text(hjust = 0.5))
+
+pdf(file.path(paste0(output_path,"acc+gps_subj",sen,".pdf")),height = 4,width = 5)
+p_subj_cor_perm
+dev.off()
+```
+
+```{r gps vs. acc vs. acc+gps}
+df_accgps_time = data.frame(GPS = acc_time, Accelerometer = acc_acc_time, `GPS and Acceleromter` = acc_time_cb_accgps)
+df_accgps_time_long = gather(df_accgps_time, feature, accuracy, 1:3, factor_key=TRUE)
+mu = ddply(df_accgps_time_long, "feature", summarise, grp.mean=mean(accuracy))
+p_accgps_feature = ggplot(df_accgps_time_long, aes(x=accuracy,color = feature, fill = feature)) + 
+    geom_density(size = 1, alpha = 0) + 
+    #geom_histogram(aes(y=..density..), alpha=0.2, 
+    #            position="identity") + 
+    geom_vline(data=mu, aes(xintercept=grp.mean, color=feature),
+             linetype="dashed") +
+    labs(y = "Density", x = "GPS Footprint Prediction Accuracy") + 
+    theme_cowplot() +
+    theme(legend.position="top")
+
+pdf(file.path(paste0(output_path,"gps+acc_features_density",sen,".pdf")),height = 4,width = 10)
+p_accgps_feature
+dev.off()   
+
+```
+
+
+```{r gps vs. acc vs. acc+gps subj}
+df_accgps_subj = data.frame(GPS = value(acc_subj[order(acc_subj)]), Accelerometer = acc_acc_subj[order(acc_acc_subj)], `GPS and Acceleromter` = acc_subj_cb_accgps[order(acc_subj_cb_accgps)], subj = names(acc_subj[order(acc_subj)]))
+
+df_accgps_subj = data.frame(GPS = acc_subj, Accelerometer = acc_acc_subj, `GPS and Acceleromter` = acc_subj_cb_accgps, subj = names(acc_subj))
+
+p_subj_accgps = ggplot(df_accgps_subj, aes(x = reorder(subj,GPS), y = GPS)) + 
+  geom_point(aes(y = GPS), color = "#F8766D", size = 2) + 
+  geom_point(aes(y = Accelerometer), color = "#7CAE00", size =2 ) +
+  geom_point(aes(y = GPS.and.Acceleromter), color = "#00BFC4", size =2 ) +
+  theme_cowplot() + 
+  labs(x = "Subjects", y = "Mobility Footprint \n Identification Accuracy")
+
+pdf(file.path(paste0(output_path,"acc_gps_vs_subj",sen,".pdf")),height = 4,width = 10)
+p_subj_accgps
+dev.off() 
+```
+
+```{r subj gps/acc scatter}
+pairs(df_accgps_subj[,1:3], pch = 19,  cex = 0.5,
+      lower.panel=NULL)
+
+
+
+upper.panel<-function(x, y){
+  points(x,y, pch=19)
+  r <- round(cor(x, y), digits=2)
+  txt <- paste0("R = ", r,",")
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  text(0.2, 0.9, txt)
+  #abline(coef = c(0,1))
+  
+
+  # p-value calculation
+  p <- cor.test(x, y)$p.value
+  txt2 <- format(c(p, 0.123456789), digits = 2)[1]
+  txt2 <- paste("p= ", txt2, sep = "")
+  if(p<0.01) txt2 <- paste("p= ", "<0.01", sep = "")
+  if(p<0.001) txt2 <- paste("p= ", "<0.001", sep = "")
+  if(p<0.0001) txt2 <- paste("p= ", "<0.0001", sep = "")
+  if(p<0.00001) txt2 <- paste("p= ", "<0.00001", sep = "")
+  if(p<0.000001) txt2 <- paste("p= ", "<0.000001", sep = "")
+  text(0.6, 0.9, txt2)
+  
+}
+
+
+
+pdf(file.path(paste0(output_path,"accgps_subj_pair.pdf")),height = 6,width = 6)
+pairs(df_accgps_subj[,c(3,1,2)], lower.panel = NULL, 
+      upper.panel = upper.panel)
+dev.off() 
+
+```
+
+```{r acc vs. data quantity}
+pdf(file.path(paste0(output_path,"days_acc_scatter_acc.pdf")),height = 4,width = 5)
+conf_scatter_plot(subj_acc_days, acc_acc_subj, "acc_days")
+dev.off()
+
+
+pdf(file.path(paste0(output_path,"days_acc_scatter_gps_days.pdf")),height = 4,width = 5)
+conf_scatter_plot(subj_acc_days, subj_days$`Days Collected`, "acc_days")
+dev.off()
+```
+
+
+```{r acc vs. data quality}
+get_data_mean = function(subj){
+  foo = readRDS(file.path("~/Documents/xia_gps/beiwe_output_043020/Results/Group/accelerometer/",subj,"/accelerometer_raw.rds"))
+  mean(sapply(unique(foo$date), function(i) dim(subset(foo,date == i))[1]))
+}
+
+acc_data_quality = sapply(subj_list,get_data_mean)
+acc_data_quality$IID = names(acc_data_quality)
+acc_data_quality$data_quality = as.numeric(value(unlist(acc_data_quality)[1:41]))
+
+
+pdf(file.path(paste0(output_path,"quality_acc_scatter_acc.pdf")),height = 4,width = 5)
+conf_scatter_plot(as.data.frame(acc_data_quality), acc_acc_subj, "data_quality")
+dev.off()
+
+```
+
+
+```{r data quantitu cutoff}
+df_quant_time = data.frame(set1 = gps_quant_acc_time_1, set2 = gps_quant_acc_time_2, set3 = gps_quant_acc_time_3, fullset = acc_time)
+df_quant_time_long = gather(df_quant_time, feature, accuracy, 1:4, factor_key=TRUE)
+mu = ddply(df_quant_time_long, "feature", summarise, grp.mean=mean(accuracy))
+p_quant_time = ggplot(df_quant_time_long, aes(x=accuracy,color = feature, fill = feature)) + 
+    geom_density(size = 1, alpha = 0) + 
+    #geom_histogram(aes(y=..density..), alpha=0.2, 
+    #            position="identity") + 
+    geom_vline(data=mu, aes(xintercept=grp.mean, color=feature),
+             linetype="dashed") +
+    labs(y = "Density", x = "GPS Footprint Prediction Accuracy") + 
+    theme_cowplot() +
+    theme(legend.position="top")
+
+pdf(file.path(paste0(output_path,"quant_time_density",sen,".pdf")),height = 4,width = 10)
+p_quant_time
+dev.off()   
+
+
+
+df_quant_subj = data.frame(subj = subj_list, fullset = acc_subj, set1 = NA, set2= NA, set3 = NA, days = subj_days$`Days Collected`)
+df_quant_subj$set1[which(df_quant_subj$subj %in% names(gps_quant_acc_subj_1))] = gps_quant_acc_subj_1
+df_quant_subj$set2[which(df_quant_subj$subj %in% names(gps_quant_acc_subj_2))] = gps_quant_acc_subj_2
+df_quant_subj$set3[which(df_quant_subj$subj %in% names(gps_quant_acc_subj_3))] = gps_quant_acc_subj_2
+df_quant_subj['perm',] = c("perm",1/length(acc_subj),1/length(gps_quant_acc_subj_1),1/length(gps_quant_acc_subj_2),1/length(gps_quant_acc_subj_3), 1)
+
+p_subj_accgps = ggplot(df_quant_subj, aes(x = reorder(subj,fullset), y = fullset)) + 
+  geom_point(aes(y = fullset), color = "#f5ad42", size =2 ) +
+  geom_point(aes(y = set1), color = "#F8766D", size = 2) + 
+  geom_point(aes(y = set2), color = "#7CAE00", size =2 ) +
+  geom_point(aes(y = set3), color = "#00BFC4", size =2 ) +
+  theme_cowplot() + 
+  labs(x = "Subjects", y = "Mobility Footprint \n Identification Accuracy")
+
+pdf(file.path(paste0(output_path,"acc_gps_vs_subj",sen,".pdf")),height = 4,width = 10)
+p_subj_accgps
+dev.off() 
+
+
+df_quant_subj_long = gather(df_quant_subj, feature, accuracy, 2:5, factor_key=TRUE)
+p_quant_subj_long = ggplot(df_quant_subj_long, aes(x=feature, y=accuracy, group=subj, color=days)) +
+    geom_line() +
+    theme_cowplot() + 
+    scale_color_viridis() +
+    xlab("")
+
+pdf(file.path(paste0(output_path,"quant_subj_trend",sen,".pdf")),height = 8,width = 7)
+p_quant_subj_long
+dev.off()   
+
+```
+
+
+```{r EMA variability}
+for (i in 1:length(q_var_lms)){
+  
+  anno_text = paste("R=",round(-sqrt(unlist(q_var_pvals$rsqr_accgps[i])),2), ", p=", round(unlist(q_var_pvals$p_accgps[i]),3))
+    
+  p = visreg(q_var_lms[[i]]$accgps, "mood_var", line=list(col="#3576b5",size = 0.5),points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2")), gg = T ) + 
+              ylab("Individual Footprint Distinctiveness \n (GPS+ACC)") + xlab(paste("Variability of \n",rownames(q_var_pvals)[i])) +
+              theme_cowplot() +
+              annotate("text", -Inf, Inf, label = anno_text, hjust = -0.1, vjust = 1)
+  
+  pdf(file.path(paste0(output_path,"rmssd_IFD_accgps_",rownames(q_var_pvals)[i],".pdf")),height = 4,width = 5)
+  print(p)
+  dev.off()
+
+}
+```
+
+```{r Dx sensitivity}
+p = visreg(acc_subj_dx_sum_fit, "AxisII_Sum", gg = T, line=list(col="#3576b5",size = 0.5, alpha =0.5), 
+       points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"), alpha = .25)) + 
+  xlab("") + ylab("Individual Footprint Distinctiveness") +
+  theme_cowplot()
+
+pdf(file.path(paste0(output_path,"Dx_IFD_accgps.pdf")),height = 4,width = 5)
+print(p)
+dev.off()
+
+p = visreg(lm(ema ~ AxisII_Sum + age + sex , acc_subj_dx_sum), "AxisII_Sum", gg = T, line=list(col="#3576b5",size = 0.5, alpha =.25), 
+       points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"), alpha = .25)) + 
+  xlab("") + ylab("EMA Mood Variability") +
+  theme_cowplot()
+
+pdf(file.path(paste0(output_path,"Dx_ema.pdf")),height = 4,width = 5)
+print(p)
+dev.off()
+
+```
+
+```{r age and sex}
+age_sex_gps_fit = lm(gps ~ age + sex + gps_days, acc_subj_dx_sum)
+age_sex_acc_fit = lm(acc ~ age + sex + acc_days, acc_subj_dx_sum)
+age_sex_accgps_fit = lm(accgps ~ age + sex + acc_days + gps_days, data = acc_subj_dx_sum)
+
+age_sex_accgps_fit = update(age_sex_accgps_fit,~.-age)
+age_sex_gps_fit = update(age_sex_gps_fit,~.-age)
+age_sex_acc_fit = update(age_sex_acc_fit,~.-age)
+
+
+anno_text = paste("R=",round(cor.test(update(age_sex_acc_fit,~.-age)$residuals,age_sex_acc_fit$model$age)$estimate,2), ", p=", round(summary(age_sex_acc_fit)[[4]][,4]["age"],3))
+
+anno_text = paste("R=",round(sqrt(summary(lm(update(age_sex_acc_fit,~.-sex)$residuals ~ age_sex_acc_fit$model$sex))$r.squared),2), ", p=", round(summary(age_sex_acc_fit)[[4]][,4]["sex2"],5))
+
+p = visreg(age_sex_acc_fit, "sex", gg = T, line=list(col="#3576b5",size = 0.5, alpha = 1), 
+       points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"), alpha = 1)) + 
+  xlab("Sex") + ylab("Individual Footprint Distinctiveness") + 
+  theme_cowplot() + 
+  annotate("text", -Inf, Inf, label = anno_text, hjust = -0.1, vjust = 1)
+  
+
+pdf(file.path(paste0(output_path,"sex_acc_scatter_noage.pdf")),height = 4,width = 5)
+print(p)
+dev.off()
+
+p = visreg(lm(accgps ~ age + sex + acc_days + gps_days, acc_subj_dx_sum), "sex", gg = T, line=list(col="#3576b5",size = 0.5), 
+       points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"))) + 
+  xlab("Sex") + ylab("Individual Footprint Distinctiveness") + 
+  theme_cowplot()
+
+pdf(file.path(paste0(output_path,"Dx_ema.pdf")),height = 4,width = 5)
+print(p)
+dev.off()
 ```

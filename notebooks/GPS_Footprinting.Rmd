@@ -44,6 +44,11 @@ require(openxlsx)
 require(visreg)
 require(factoextra)
 require(rstatix)
+require(gridExtra)
+require(colorspace)
+require(grid)
+require(data.table)
+require(psych)
 source('~/Documents/GitHub/SmartphoneSensorPipeline/Extra/plotting_functions.R')
 ```
 
@@ -125,7 +130,7 @@ ggplotly(p)
 Next, we are removing the days with excessive data missingness. This is of course an arbitrary step. Therefore we will conduct a sensitivity analysis of the missingness threshold we set by performing the analysis across multiple different thresholds. For now, the current sensitivity cutoff is set at `r sensitivity_cutoff`, which amounts to only excluding those with `r sensitivity_cutoff/1440*100`% of GPS missing.
 
 ```{r results='asis'}
-sensitivity_cutoff = 1430 # this controls the cutoff threshold
+sensitivity_cutoff = 1440 # this controls the cutoff threshold
 gps_df_clean2 = subset(gps_df_clean, MinsMissing < sensitivity_cutoff)
 ```
 
@@ -158,16 +163,52 @@ ggplotly(subj_minmissing_plot)
 
 
 
+
+
+
 ### 4. Random Data Partitions
 
 To operationalize individual footprinting prediction, we randomly split each individual's available GPS data to two half partitions for `r part_times` times. We used the features from the first half to determine if we can identify the same individual using their data in the second unseen half. Again, to avoid any (un)lucky random splits, we repeated data partition `r part_times` times.
+
+
+```{r COVID analysis}
+gps_df_clean2_covid = gps_df_clean2[gps_df_clean2$Date > as.Date("2020-3-10"),]
+gps_df_clean2_31020 = gps_df_clean2[gps_df_clean2$Date <= as.Date("2020-3-10"),]
+
+gps_df_clean2 = gps_df_clean2_31020
+
+`%notin%` <- Negate(`%in%`)
+gps_df_clean2_other = subset(gps_df_clean2, IID %notin% unique(gps_df_clean2_covid$IID))
+
+gps_df_clean2_covid_all = rbind(gps_df_clean2_other,gps_df_clean2_covid)
+
+acc_subj_31020  
+acc_time_31020 
+
+acc_subj_32320 
+acc_time_32320  
+
+acc_subj_all  
+acc_time_all 
+
+acc_subj_covid = acc_subj
+acc_time_covid = acc_time
+
+plot(acc_subj_all,acc_subj_31020) +abline(coef = c(0,1)) + abline(coef = c(0.93,0)) + abline(v = 0.882) + abline(h =0.62) + abline(v =0.824) + abline(h =0.05) + abline(v =0.808)
+
+plot(acc_subj_all,acc_subj_covid) + abline(coef = c(0,1)) 
+subj_days_all = gps_df_clean2 %>% group_by(IID) %>% dplyr::tally(name = "days")
+subj_days_covid = gps_df_clean2_covid_all %>% group_by(IID) %>% dplyr::tally(name = "days")
+subj_days_31020 = gps_df_clean2_31020 %>% group_by(IID) %>% dplyr::tally(name = "days")
+
+```
+
 
 ```{r}
 set.seed(510)
 make_subj_seq = function(gps_df_clean2,part_times) {
   subj_seq = list()
   for (subj in unique(gps_df_clean2$IID)){
-    print(subj)
     subj_data = subset(gps_df_clean2, IID==subj)
     if (dim(subj_data)[1] >5) {
     subj_seq[[subj]] <-createDataPartition(subj_data$IID,times = part_times, p =0.5)
@@ -175,10 +216,13 @@ make_subj_seq = function(gps_df_clean2,part_times) {
   }
   return(subj_seq)
 }
-part_times = 1000
+part_times = 100
 subj_seq = make_subj_seq(gps_df_clean2, part_times)
 
 ```
+
+
+
 
 
 
@@ -215,7 +259,7 @@ gps_clean2_feature = make_feature_matrix(gps_df_clean2, subj_seq, 3:17 )
 
 ```{r visualization of feature correlations across subjects}
 gps_wide_matrix = data.frame()
-
+subj_days = gps_df_clean2 %>% group_by(IID) %>% dplyr::tally(name = "Days Collected")
 for (subj in arrange(subj_days,`Days Collected`)$IID){
   #if ((subj %in% subj_days$IID[which(subj_days$`Days Collected`<=10)]) == T) {
     for (part in 1:5){
@@ -825,7 +869,7 @@ q_time_cb_cor =  hist_chx(unlist(perm_cb_cor$perm_acc_time), bins = 8, title = p
 
 ### 15. Associations with Psychopathology
 ```{r psychopathology, fig.align="center", message=FALSE, warning=FALSE}
-ids = read.xlsx(file.path(project_path,"data/clinical_data/subjecttracker_4.xlsx"))[1:length(unique(gps_df_clean2$IID)),]
+ids = read.xlsx(file.path(project_path,"data/clinical_data/subjecttracker_4.xlsx"))[1:41,]
 #psych_score = read.csv(file.path(project_path,"data/self_report_scored_20200128.csv"))
 # psych_pro = psych %>% filter(ari_proband_complete == 2)
 psych_item = read.csv(file.path(project_path,"data/clinical_data/self_report_itemwise.csv"))
@@ -844,7 +888,7 @@ psych_sum$days = psych_sum$`Days Collected`
 psych_sum = inner_join(subj_minmissing, psych_sum, by = c( "IID" = "beiweID" ))
 psych_als = data.frame(als = psych_sum[,263:280], BBLID = psych_sum$BBLID)
 psych_ari = data.frame(ari = psych_sum[,23:29], BBLID = psych_sum$BBLID)
-  
+psych_sum$gpsacc_subj = acc_subj_cb_accgps
  # show results
 
 als.pca <- prcomp(na.omit(psych_sum[,263:280]), scale = TRUE)
@@ -859,6 +903,7 @@ fviz_eig(als.pca) / fviz_eig(ari.pca)
 
 ```{r }
 als_ari_sum = lm(acc ~ sum_als + sum_ari + days , data = psych_sum)
+acc_als_ari_sum = lm(gpsacc_subj ~ sum_als + sum_ari + days , data = psych_sum)
 
 #als_fit = lm( acc ~ scale(pca_als) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum)
 #summary(lm( acc ~ scale(als_AD) + scale(days) + scale(admin_age) + scale(admin_sex) , data = psych_sum))$coefficients[2,4]
@@ -1013,10 +1058,10 @@ fviz_pca_biplot(res.pca, repel = TRUE,
 
 ```{r feature leison experiment, message=FALSE, warning=FALSE}
 feat_names = names(gps_df_clean2[,3:17])
-subj_seq_100 = make_subj_seq(gps_df_clean2, 10)
+subj_seq_100 = make_subj_seq(gps_df_clean2, 100)
 gps_ft_leison = list()
 gps_df_perm = gps_df_clean2
-perm_time_cut = 10
+perm_time_cut = 100
 perm_acc_time_cut = list()
 perm_acc_subj_cut = list()
 for (i in 1:15){
@@ -1100,12 +1145,434 @@ p_perm<-ggplot(acc_time_lesion_perm_df, aes(x=reorder(feature, acc_time, FUN = m
 p_perm
 ```
 
+### 20. accelerometer data
 
-```{r}
-subj_mins = gps_df_clean2 %>% group_by(IID) %>% dplyr::tally(name = "Days Collected")
-conf_scatter_plot(subj_minmissing, gps_ft_leison$MinsMissing$acc_subj, "MinsMissing")
+```{r organizing accelerometer data}
+subj_list = unique(gps_df$IID)
+subj_acc_data_dim = dim(rbindlist(lapply(subj_list, function(subj) {print(subj); subj_data =  readRDS(file.path(data_path,"Results/Group/accelerometer",subj,"accelerometer_ft.rds")); subj_data[,c(2:8,11)]})))
+
+subj_acc_data_clean = as.data.frame(rbindlist(lapply(subj_list, function(subj) {print(subj); subj_data =  readRDS(file.path(data_path,"Results/Group/accelerometer",subj,"accelerometer_ft.rds")); subj_data[2:(dim(subj_data)[1]-1),c(2:8,11)]}))) #also removes 1st and last day
 ```
 
+```{r example of the cov of accelerometer}
+example_acc_data = subj_acc_data_clean[subj_seq$`16xv6ko1`$Resample0001,1:7]
+acc_cor = rquery.cormat(example_acc_data, type = "full")
+```
+```{r calc acc features}
+subj_acc_data_clean$IID = subj_acc_data_clean$subject
+set.seed(510)
+acc_subj_seq = make_subj_seq(subj_acc_data_clean, part_times)
+acc_clean_feature = make_feature_matrix(subj_acc_data_clean, acc_subj_seq,  c(1:7) )
+acc_wide_matrix = data.frame()
+subj_acc_days = subj_acc_data_clean %>% group_by(IID) %>% dplyr::tally(name = "acc_days")
+for (subj in arrange(subj_acc_days,`acc_days`)$IID){
+    for (part in 1:5){
+      half_1 = acc_clean_feature$subj_mat_1[[subj]][[part]]$cor
+      half_2 = acc_clean_feature$subj_mat_2[[subj]][[part]]$cor
+      half_1_half_2 = c(half_1,half_2)
+      acc_wide_matrix = rbind(acc_wide_matrix,half_1)
+      acc_wide_matrix = rbind(acc_wide_matrix,half_2)
+      }
+}
+
+acc_wide_matrix = t(acc_wide_matrix)
+acc_corplot = rquery.cormat(acc_wide_matrix, type = "full",graph=FALSE)
+acc_corplot$subj = arrange(subj_acc_days,`acc_days`)$IID
+
+levelplot(acc_corplot$r,scales=list(draw=FALSE),col.regions = rev(rainbow(1000))[-c(1:20)], region =T, ylab.right = "Pearson correlation", main=list(label='Acc Feature Similarity'),xlab="",ylab="")
+```
+
+```{r match on acc features}
+acc_match_cor = calc_match_cor(acc_clean_feature$subj_mat_1,acc_clean_feature$subj_mat_2)
+acc_acc_time = calc_acc_time(acc_match_cor, "max")
+acc_acc_subj = calc_acc_subj(acc_match_cor)
+```
+
+```{r acc perm}
+acc_df_perm = subj_acc_data_clean
+perm_time = 1000
+perm_acc_acc_time = list()
+perm_acc_acc_subj = list()
+for (i in 1:perm_time) {
+  perm_part_times = 1
+  print(paste("processing ...", i,"..."))
+  acc_df_perm$IID = sample(acc_df_perm$IID)
+  perm_subj_seq = make_subj_seq(acc_df_perm, part_times = perm_part_times)
+  perm_acc = make_feature_matrix(acc_df_perm,perm_subj_seq,1:7)
+  perm_mat_1 = perm_acc$subj_mat_1
+  perm_mat_2 = perm_acc$subj_mat_2
+  perm_match_cor = calc_match_cor(perm_mat_1,perm_mat_2)
+  perm_acc_acc_time[[i]] = calc_acc_time(perm_match_cor)
+  perm_acc_acc_subj[[i]] = calc_acc_subj(perm_match_cor)
+}
+```
+
+```{r combine gps + acc}
+gps_acc_combined_feat = list()
+for (subj in subj_list){
+  for (time in 1:part_times){
+    gps_feat1 = gps_clean2_feature$subj_mat_1[[subj]][[time]]$cor
+    acc_feat1 = acc_clean_feature$subj_mat_1[[subj]][[time]]$cor
+    
+    gps_feat2 = gps_clean2_feature$subj_mat_2[[subj]][[time]]$cor
+    acc_feat2 = acc_clean_feature$subj_mat_2[[subj]][[time]]$cor
+
+    gps_acc_combined_feat$subj_mat_1[[subj]][[time]] = c(gps_feat1, acc_feat1)
+    gps_acc_combined_feat$subj_mat_2[[subj]][[time]] = c(gps_feat2, acc_feat2)
+  }
+}
+```
+
+
+
+```{r match with combined features, fig.align="center", fig.height=3, fig.width=3}
+match_combined_gps_accfeat = calc_match_vector(gps_acc_combined_feat$subj_mat_1, gps_acc_combined_feat$subj_mat_2, "cor")
+acc_time_cb_accgps  = calc_acc_time(match_combined_gps_accfeat, "max")
+acc_subj_cb_accgps  = calc_acc_subj(match_combined_gps_accfeat, "max")
+p = hist_chx(acc_time_cb_accgps, bins = 14, title = paste("Combined Features \n by data partition"), xaxis = "Prediction Accuracy", yaxis = "Count")
+p
+```
+
+
+```{r acc+gps perm}
+gps_df_perm = gps_df_clean2
+acc_df_perm = subj_acc_data_clean
+
+perm_acc_gps_time = list()
+perm_acc_gps_subj = list()
+
+for (i in 1:perm_time) {
+  perm_part_times = 1
+  print(paste("processing ...", i,"..."))
+  gps_df_perm$IID = sample(gps_df_perm$IID)
+  acc_df_perm$IID = sample(acc_df_perm$IID)
+  
+  perm_subj_seq = make_subj_seq(gps_df_perm,part_times = perm_part_times)
+  perm_acc_subj_seq = make_subj_seq(acc_df_perm,part_times = perm_part_times)
+  
+  perm_gps_cor = make_feature_matrix(gps_df_perm,perm_subj_seq,3:17)
+  perm_acc_cor = make_feature_matrix(acc_df_perm,perm_acc_subj_seq,1:7)
+  
+  subj_mat_1 = list()
+  subj_mat_2 = list()
+  
+    for (subj in subj_list){
+        subj_mat_1[[subj]]$Resample1 = as.numeric(c(perm_gps_cor$subj_mat_1[[subj]][[1]]$cor, perm_acc_cor$subj_mat_1[[subj]][[1]]$cor))
+        subj_mat_2[[subj]]$Resample1 = as.numeric(c(perm_gps_cor$subj_mat_2[[subj]][[1]]$cor, perm_acc_cor$subj_mat_2[[subj]][[1]]$cor))
+    }
+  perm_gps_acc_mats = list(subj_mat_1 = subj_mat_1, subj_mat_2 = subj_mat_2)
+  
+  perm_match = calc_match_vector(perm_gps_acc_mats$subj_mat_1,perm_gps_acc_mats$subj_mat_2, "cor")
+  perm_acc_gps_time[[i]] = calc_acc_time(perm_match, "max")
+  perm_acc_gps_subj[[i]] = calc_acc_subj(perm_match, "max")
+}
+
+
+
+perm_acc_gps_time = unlist(perm_acc_gps_time)
+perm_acc_gps_subj = unlist(perm_acc_gps_subj)
+
+```
+
+
+### 21. screen state
+```{r organizing screen data}
+subj_list = unique(gps_df$IID)
+power_ft = readRDS(file.path(data_path,"Results/Group/power_ft.rds"))
+power_ft$IID = power_ft$subject
+
+subj_acc_data_clean = rbindlist(lapply(subj_list, function(subj) {print(subj); subj_power_data = subset(power_ft, IID == subj); print(dim(subj_power_data));  subj_power_data = subj_power_data[2:(dim(subj_power_data)[1]-1),4:9]; print(dim(subj_power_data)); return(subj_power_data)}))
+
+
+subj_power_data_clean = as.data.frame(rbindlist(lapply(subj_list, function(subj) {print(subj); subj_data =  readRDS(file.path(data_path,"Results/Group/accelerometer",subj,"accelerometer_ft.rds")); subj_data[2:(dim(subj_data)[1]-1),c(2:8,11)]}))) #also removes 1st and last day
+```
+
+### 22. Factor Analysis of EMA
+```{r factor analysis ema}
+survey_ft = readRDS(file.path(data_path,"Results/Group/survey_ft.rds"))
+q_list = substr(names(survey_ft$`26k56oo9`),1,30)
+survey_ans = sapply(subj_list, function(subj) (lapply(q_list, function(q) get_question_ans(q)[[subj]]$ans_num)))
+survey_ans_list = lapply(1:dim(survey_ans)[1],function(x) value(unlist(survey_ans[x,])))
+max_nrow = max(sapply(survey_ans_list,length))
+survey_ans_df = sapply(survey_ans_list, function(s_list) c(s_list,rep(NA,max_nrow -length(s_list))))
+colnames(survey_ans_df) = q_list
+
+library(psych)
+library(qgrah)
+xcor <- cor_auto(survey_ans_df, detectOrdinal = T, ordinalLevelMax = 7) #
+VSS.scree(xcor)
+nfactors(xcor,n.obs=dim(survey_ans_df)[1]) 
+fa.parallel(xcor,n.obs=dim(survey_ans_df)[1])
+fa.sort(fa(xcor,3,rotate="oblimin"))
+
+xcor <- cor_auto(survey_ans_df, detectOrdinal = T, ordinalLevelMax = 7) #
+omega(xcor,5, rotate = "promax", flip=T, fm="pc")
+
+sleep_ans_df = survey_ans_df[1:788,sleep_qs]
+sleep_xcor <- cor_auto(sleep_ans_df, detectOrdinal = T, ordinalLevelMax = 7) #
+VSS.scree(sleep_xcor)
+fa.sort(fa(sleep_xcor,2,rotate="promax",n.obs = 788))
+
+omega(sleep_xcor,2, rotate = "promax", flip=T, fm="pc")
+
+
+moodnow_ans_df = survey_ans_df[1:2139,mood_now_qs]
+moodnow_xcor <- cor_auto(moodnow_ans_df, detectOrdinal = T, ordinalLevelMax = 7) #
+VSS.scree(moodnow_xcor)
+fa.sort(fa(sleep_xcor,2,rotate="promax",n.obs = 788))
+
+omega(moodnow_xcor,2, rotate = "promax", flip=T, fm="pc", title = "moodnow_pc")
+
+
+moodsince_ans_df = survey_ans_df[1:2139,c(mood_since_qs)]
+moodsince_xcor <- cor_auto(moodsince_ans_df, detectOrdinal = T, ordinalLevelMax = 7) #
+VSS.scree(moodsince_xcor)
+fa.sort(fa(sleep_xcor,2,rotate="promax",n.obs = 788))
+
+omega(moodsince_xcor,2, rotate = "promax", flip=T, fm="pc", title = "moodsince_pc")
+
+
+moodall_ans_df = survey_ans_df[1:2139,c(mood_now_qs,mood_since_qs)]
+moodall_xcor <- cor_auto(moodall_ans_df, detectOrdinal = T, ordinalLevelMax = 7) #
+VSS.scree(moodall_xcor)
+fa.sort(fa(sleep_xcor,2,rotate="promax",n.obs = 788))
+
+omega(moodall_xcor,3, rotate = "promax", flip=T, fm="pc", title = "moodall_pc")
+
+
+
+fa.sort(fa(sleep_xcor,2,rotate="promax",n.obs = 788))
+fa.sort(fa(moodnow_xcor,2,rotate="promax",n.obs = 2139))
+fa.sort(fa(moodsince_xcor,2,rotate="promax",n.obs = 2139))
+
+
+```
+
+
+
+### 22. Associate with EMA
+```{r }
+
+get_question_ans = function(question_of_interest) {
+  question_idx = lapply(names(survey_ft), function(subj) which(grepl(question_of_interest, names(survey_ft[[subj]]), fixed = TRUE) == TRUE))
+  names(question_idx) = names(survey_ft)
+  
+  question_answer = lapply(names(survey_ft), function(subj) {rbindlist(survey_ft[[subj]][question_idx[[subj]]])})
+  names(question_answer) = names(survey_ft)
+  
+  return(question_answer)
+}
+
+
+
+get_question_variance = function(question_of_interest) {
+  question_idx = lapply(names(survey_ft), function(subj) which(grepl(question_of_interest, names(survey_ft[[subj]]), fixed = TRUE) == TRUE))
+  names(question_idx) = names(survey_ft)
+  
+  question_answer = lapply(names(survey_ft), function(subj) {rbindlist(survey_ft[[subj]][question_idx[[subj]]])})
+  names(question_answer) = names(survey_ft)
+  
+  q_var = unlist(lapply(subj_list, function(subj) rmssd(question_answer[[subj]]$ans_num, na.rm = T)))
+  return(q_var)
+}
+
+get_sleep_param = function(subj){
+  print(subj)
+  sleep_file = paste0("~/Documents/xia_gps/beiwe_output_043020/Results/Group/sleep/",subj,"_beiwe.RData")
+  if (file.exists(sleep_file)){
+    load(sleep_file)
+    as.numeric(unlist(data.frame(beiwe$param_est, hr_sleep_var = rmssd(beiwe$sleep_est$beiwe_waketime - beiwe$sleep_est$beiwe_bedtime), 
+               sl_time = rmssd(beiwe$sleep_est$beiwe_bedtime),
+               wk_time = rmssd(beiwe$sleep_est$beiwe_waketime))))
+  } else {
+    as.numeric(unlist(data.frame(id = subj, mu_s = NA, mu_w = NA, sd_s = NA, sd_w = NA, 
+               lambda_s = NA, lambda_w = NA, hr_sleep_var = NA,
+               sl_time = NA, wk_time = NA)))
+  }
+}
+
+sleep_param = t(sapply(subj_list,get_sleep_param))
+colnames(sleep_param) = c("subj", "mu_s", "mu_w", "sd_s", "sd_w", "lambda_s", "lambda_w", "hr_sleep_var", "sl_time", "wk_time")
+
+
+
+ifd = value(acc_subj)
+survey_ft = readRDS(file.path(data_path,"Results/Group/survey_ft.rds"))
+
+q_list = substr(names(survey_ft$`26k56oo9`),1,30)
+
+q_list_long = names(survey_ft$`26k56oo9`)
+
+
+sleep_qs = 1:10
+mood_now_qs = 11:19
+mood_since_qs = 20:27
+
+sleep_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[sleep_qs], get_question_ans),function(q) q[[subj]]))$ans_num))
+mood_now_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[mood_now_qs], get_question_ans),function(q) q[[subj]]))$ans_num))
+mood_since_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[mood_since_qs], get_question_ans),function(q) q[[subj]]))$ans_num))
+
+q_var_list = as.data.frame(sapply(q_list, function(q) {print(q); get_question_variance(q)}))
+q_var_list[,c("sleep_cat","mood_cat","mood_since_cat")] = cbind(sleep_qs_cat_var,mood_now_qs_cat_var,mood_since_qs_cat_var)
+
+q_list_long = c(q_list_long,c("sleep_cat","mood_cat","mood_since_cat"))
+
+q_var_list = cbind(q_var_list,sleep_param[,2:10])
+
+q_var_cor_mat = rquery.cormat(q_var_list, type = "full")
+
+
+get_q_var_pvals = function(question_of_interest){
+  print(question_of_interest)
+  q_var_lm_df = data.frame(acc_days = subj_acc_days$acc_days, gps_days = subj_days$`Days Collected`, mood_var = q_var_list[,question_of_interest], ifd_accgps =  value(acc_subj_cb_accgps), ifd_gps = value(acc_subj), age = psych_sum$admin_age, sex = as.factor(psych_sum$admin_sex))
+  
+  q_var_gps_fit = lm(ifd_gps ~ mood_var + gps_days + age + sex, data = q_var_lm_df)
+  q_var_gps_p = summary(q_var_gps_fit)[[4]][,4]['mood_var']
+  
+  q_var_accgps_fit = lm(ifd_accgps ~ mood_var + gps_days + acc_days + age + sex, data = q_var_lm_df)
+  q_var_accgps_p = summary(q_var_accgps_fit)[[4]][,4]['mood_var']
+  
+  q_var_lm_df$res_gps = update(q_var_gps_fit, ~.-mood_var)$residuals
+  q_var_lm_df$res_accgps = update(q_var_accgps_fit, ~.-mood_var)$residuals
+  
+  q_var_gps_res_fit = lm(res_gps ~ mood_var, data = q_var_lm_df)
+  q_var_accgps_res_fit = lm(res_accgps ~ mood_var, data = q_var_lm_df)
+  
+  q_var_gps_res_p = summary(q_var_gps_res_fit)[[4]][,4]['mood_var']
+  q_var_accgps_res_p = summary(q_var_accgps_res_fit)[[4]][,4]['mood_var']
+  
+  q_var_gps_res_cor = summary(q_var_gps_res_fit)[[8]]
+  q_var_accgps_res_cor = summary(q_var_accgps_res_fit)[[8]]
+  
+  return(data.frame(p_gps = q_var_gps_p, p_accgps = q_var_accgps_p, rsqr_gps = q_var_gps_res_cor, rsqr_accgps = q_var_accgps_res_cor))
+}
+
+get_q_var_lm = function(question_of_interest){
+  q_var_lm_df = data.frame(acc_days = subj_acc_days$acc_days, gps_days = subj_days$`Days Collected`, mood_var = q_var_list[,question_of_interest], ifd_accgps =  value(acc_subj_cb_accgps), ifd_gps = value(acc_subj), age = psych_sum$admin_age, sex = as.factor(psych_sum$admin_sex))
+  q_var_gps_p = lm(ifd_gps ~ mood_var + gps_days + age + sex, data = q_var_lm_df)
+  q_var_accgps_p = lm(ifd_accgps ~ mood_var  + gps_days + acc_days + age + sex, data = q_var_lm_df)
+  
+  return(list(gps = q_var_gps_p, accgps = q_var_accgps_p))
+}
+
+q_var_pvals = as.data.frame(t(sapply(names(q_var_list), get_q_var_pvals)))
+q_var_pvals = q_var_pvals[which(q_var_pvals$p_gps <0.1 | q_var_pvals$p_accgps <0.1),]
+q_var_lms = lapply(rownames(q_var_pvals), get_q_var_lm)
+
+df_als_ari_ema = data.frame(als = psych_sum$sum_als, ari = psych_sum$sum_ari, ema = q_var_list$mood_since_cat)
+
+pdf(file.path(paste0(output_path,"mood_assess_pair.pdf")),height = 5,width = 5)
+pairs(df_als_ari_ema, lower.panel = NULL, 
+      upper.panel = upper.panel)
+dev.off() 
+
+```
+
+
+### Data quantity sensitivity test
+```{r cutoff plots}
+quant_set1 = quantile(subj_days$`Days Collected`,.07)
+quant_set2 = quantile(subj_days$`Days Collected`,.24)
+quant_set3 = quantile(subj_days$`Days Collected`,.36)
+
+plot(subj_days$`Days Collected`[order(subj_days$`Days Collected`)], pch = 16,
+     xlab = ("Subjets"), ylab= ("Days Collected"))
+abline(h = quant_set1)
+abline(h = quant_set2)
+abline(h = quant_set3)
+```
+
+```{r match stat}
+quant_set_subj_1 = which(subj_days$`Days Collected`>=quant_set1)
+gps_quant_match_cor_1 = calc_match_cor(gps_clean2_feature$subj_mat_1[value(quant_set_subj_1)], gps_clean2_feature$subj_mat_2[value(quant_set_subj_1)])
+gps_quant_acc_time_1 = calc_acc_time(gps_quant_match_cor_1, "max")
+gps_quant_acc_subj_1 = calc_acc_subj(gps_quant_match_cor_1)
+
+
+quant_set_subj_2 = which(subj_days$`Days Collected`>=quant_set2)
+gps_quant_match_cor_2 = calc_match_cor(gps_clean2_feature$subj_mat_1[value(quant_set_subj_2)], gps_clean2_feature$subj_mat_2[value(quant_set_subj_2)])
+gps_quant_acc_time_2 = calc_acc_time(gps_quant_match_cor_2, "max")
+gps_quant_acc_subj_2 = calc_acc_subj(gps_quant_match_cor_2)
+
+quant_set_subj_3 = which(subj_days$`Days Collected`>=quant_set3)
+gps_quant_match_cor_3 = calc_match_cor(gps_clean2_feature$subj_mat_1[value(quant_set_subj_3)], gps_clean2_feature$subj_mat_2[value(quant_set_subj_3)])
+gps_quant_acc_time_3 = calc_acc_time(gps_quant_match_cor_3, "max")
+gps_quant_acc_subj_3 = calc_acc_subj(gps_quant_match_cor_3)
+
+```
+
+
+### Clinical Dx
+```{r }
+beiwe_dx = read.csv("/Users/hxia/Documents/xia_gps/data/clinical_data/beiwe_dx.csv")
+beiwe_dx = beiwe_dx[-duplicated(beiwe_dx$BBLID),]
+
+dx_sum_1 = rbind(beiwe_dx$AXIS1_DESC1,beiwe_dx$AXIS1_DESC2,beiwe_dx$AXIS1_DESC3,beiwe_dx$AXIS1_DESC4,beiwe_dx$AXIS1_DESC5,beiwe_dx$AXIS1_DESC6,beiwe_dx$AXIS1_DESC7,beiwe_dx$AXIS1_DESC8,beiwe_dx$AXIS1_DESC9,beiwe_dx$AXIS1_DESC10)
+
+dx_sum_1[grepl("Attention",dx_sum_1)] = "ADHD"
+dx_sum_1[grepl("Bipolar",dx_sum_1)] = "Bipolar Disorder"
+dx_sum_1[grepl("Alcohol",dx_sum_1)] = "Substance Use"
+dx_sum_1[grepl("Cannabis",dx_sum_1)] = "Substance Use"
+dx_sum_1[grepl("Cocaine",dx_sum_1)] = "Substance Use"
+dx_sum_1[grepl("Substance",dx_sum_1)] = "Substance Use"
+dx_sum_1[grepl("Polysubstance",dx_sum_1)] = "Substance Use"
+dx_sum_1[grepl("Abuse",dx_sum_1)] = "Substance Use"
+dx_sum_1[grepl("Major Depressive ",dx_sum_1)] = "MDD"
+dx_sum_1[grepl("Panic Disorder",dx_sum_1)] = "Panic Disorder"
+dx_sum_1[grepl("Prodromal",dx_sum_1)] = "Prodromal"
+dx_sum_1[grepl("w/",dx_sum_1)] = "Prodromal"
+dx_sum_1[grepl("Condition on Axis I",dx_sum_1)] = "No Axis I Dx"
+dx_sum_1[grepl("Schizoaffective",dx_sum_1)] = "Schizoaffective Disorder"
+dx_sum_1[grepl("null",dx_sum_1)] = NA
+dx_sum_1[apply(dx_sum_1, 2,duplicated)] = NA
+
+table(dx_sum_1)
+
+dx_sum_1_sum = dx_sum_1
+dx_sum_1_sum[grepl("Anxiety", dx_sum_1_sum)] = "Anxiety Disorder"
+dx_sum_1_sum[grepl("Obsessive", dx_sum_1_sum)] = "Anxiety Disorder"
+dx_sum_1_sum[grepl("Panic", dx_sum_1_sum)] = "Anxiety Disorder"
+dx_sum_1_sum[grepl("Posttraumatic", dx_sum_1_sum)] = "Anxiety Disorder"
+dx_sum_1_sum[grepl("Social", dx_sum_1_sum)] = "Anxiety Disorder"
+
+dx_sum_1_sum[grepl("Bipolar", dx_sum_1_sum)] = "Mood Disorder"
+dx_sum_1_sum[grepl("Depressive", dx_sum_1_sum)] = "Mood Disorder"
+dx_sum_1_sum[grepl("MDD", dx_sum_1_sum)] = "Mood Disorder"
+dx_sum_1_sum[grepl("Mood", dx_sum_1_sum)] = "Mood Disorder"
+
+dx_sum_1_sum[grepl("Schizoaffective", dx_sum_1_sum)] = "Psychotic Disorder"
+dx_sum_1_sum[apply(dx_sum_1_sum, 2,duplicated)] = NA
+table(dx_sum_1_sum)
+
+
+dx_sum_2 = rbind(beiwe_dx$AXIS2_DESC1)
+dx_sum_2[grepl("Axis II",dx_sum_2)] = "No or Deferred Axis II"
+dx_sum_2[grepl("null",dx_sum_2)] = "No or Deferred Axis II"
+table(dx_sum_2)
+
+dx_sum_2_sum = dx_sum_2
+dx_sum_2_sum[grepl("Disorder", dx_sum_2_sum)] = "Personality Disorder"
+table(dx_sum_2_sum)
+
+
+dx_sum_all = rbind(dx_sum_1,dx_sum_1_sum,dx_sum_2, dx_sum_2_sum)
+rownames(dx_sum_all) = c(paste0("AxisI_Ind",1:10), paste0("AxisI_Sum",1:10), "AxisII_Ind", "AxisII_Sum")
+
+
+colnames(dx_sum_all) = beiwe_dx$BBLID
+dx_sum_all = as.data.frame(t(dx_sum_all))
+dx_sum_all$BBLID  = beiwe_dx$BBLID
+
+acc_subj_mood_df = data.frame(accgps = acc_subj_cb_accgps, gps = acc_subj,acc = acc_acc_subj, BBLID = psych_sum$BBLID, beiweiID = subj_list, gps_days = subj_days$`Days Collected`, acc_days = subj_acc_days$acc_days, df_als_ari_ema, age = psych_sum$admin_age, sex = as.factor(psych_sum$admin_sex))
+
+acc_subj_dx_sum = base::merge(dx_sum_all,acc_subj_mood_df)
+
+acc_subj_dx_sum_fit = lm(accgps ~ AxisII_Sum + gps_days + acc_days + sex + age, acc_subj_dx_sum)
+summary(lm(ari ~ AxisII_Sum + age + sex, acc_subj_dx_sum))
+
+
+saveRDS(acc_subj_dx_sum, "~/Documents/xia_gps/beiwe_output_043020/Results/Group/acc_dx_demo_summary.RDS")
+```
 
 ### 19. Misc Info
 ```{r message=FALSE, warning=FALSE}

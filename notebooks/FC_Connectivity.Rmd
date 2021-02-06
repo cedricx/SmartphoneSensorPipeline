@@ -1,0 +1,170 @@
+---
+title: "Functional Connectivity"
+output:
+  html_notebook:
+    includes:
+      after_body: footer.html
+    toc: yes
+    toc_float:
+      toc_collapsed: yes
+---
+`r Sys.time()`
+
+Author: [Cedric Huchuan Xia](https://www.pennlinc.io/team/Cedric-Huchuan-Xia) ([email](hxia@upenn.edu), [github](https://github.com/cedricx/))
+
+Affiliation: Penn Lifespan Informatics and Neuroimaging Center ([PennLINC](pennlinc.io)) 
+
+***
+
+### 1. Setup Environment 
+```{r load libraries, message=FALSE}
+require(reshape2)
+require(sna)
+require(tidyr)
+require(tidyverse)
+```
+
+```{r define paths}
+project_path = "~/Documents/xia_gps/"
+data_path = file.path(project_path,"data/flywheel_data/network_txt")
+atlas_path = "/Users/hxia/Documents/GitHub/xcpEngine/atlas"
+
+
+vector_to_mat = function(fc_vector, method = "half"){
+  
+  if (method == "full"){
+    num_node = sqrt(length(fc_vector))
+    matrix_fc = matrix(NA, num_node, num_node)
+    matrix_fc = matrix(fc_vector, num_node, num_node)
+  } else if (method == "half"){
+    num_node = ceiling(sqrt(length(fc_vector)*2))
+    matrix_fc = matrix(NA, num_node, num_node)
+    matrix_fc[lower.tri(matrix_fc, diag = F)] = fc_vector
+  } else if (method == "half+d") {
+    num_node = floor(sqrt(length(fc_vector)*2))
+    matrix_fc = matrix(NA, num_node, num_node)
+    matrix_fc[lower.tri(matrix_fc, diag = T)] = fc_vector
+  }
+  
+  matrix_fc = symmetrize(matrix_fc, rule = "lower")
+  return(matrix_fc)
+}
+
+get_fc_com = function(atlas_now, subj_net) {
+  com_nums = read.table(file.path(atlas_path,atlas_now,paste0(atlas_now,"CommunityAffiliation.1D")))$V1
+  com_names = read.table(file.path(atlas_path,atlas_now,paste0(atlas_now,"CommunityNames.txt")))$V1
+  com_names = substr(com_names,0,3)
+  if (atlas_now == "power264") {com_names[c(1,2)] = c("smH","smM")}
+  fc_mat_now_all = list()
+  com_name_vec = c()
+  for (net_1 in 1:max(com_nums)){
+    node_now_1 = which(com_nums == net_1)
+    net_name_1 = com_names[net_1]
+    for (net_2 in 1:max(com_nums)){
+      node_now_2 = which(com_nums == net_2)
+      net_name_2 = com_names[net_2]
+      network_now = paste(net_name_1,net_name_2,sep="-")
+      com_name_vec = c(com_name_vec,network_now)
+      for (subj in subjects) {
+      fc_mat = vector_to_mat(subj_net[[atlas_now]][[subj]]$V1)
+      fc_mat_now = fc_mat[node_now_1,node_now_2]
+      fc_mat_now = fc_mat_now[lower.tri(fc_mat_now)]
+      fc_mat_now_all[[network_now]][[subj]]$V1 = as.vector(fc_mat_now)
+      }
+    }
+  }
+  com_name_mat = vector_to_mat(com_name_vec, "full")
+  com_name_vec_short = com_name_mat[lower.tri(com_name_mat, diag = T)]
+  fc_mat_now_all_short = fc_mat_now_all[names(fc_mat_now_all) %in% com_name_vec_short]   
+  return(fc_mat_now_all_short)
+}
+```
+
+```{r compile fc data}
+subj_net_files = list()
+atlases = c("schaefer200x7","power264","schaefer400x7")
+for (atlas in atlases) {
+  subjects = list.files(file.path(data_path))
+  for (subj in subjects){
+    subj_files = list.files(file.path(data_path,subj))
+    net_pattern = paste0("*task-rest*multi*",atlas,"*")
+    file_path = file.path(data_path, 
+                            subj,subj_files[grep(glob2rx(net_pattern),subj_files)])
+    if (length(file_path)>0) {subj_net_files[[atlas]][[subj]] = read.table(file_path)
+  }
+  }
+}
+
+motion_df = c()
+for (subj in subjects){
+  subj_quality_files = list.files(file.path(data_path,"../quality_csv",subj))
+  net_pattern = paste0("*task-rest*multi*")
+  subj_quality_file = file.path(data_path, "../quality_csv",subj,subj_quality_files[grep(glob2rx(net_pattern),subj_quality_files)])
+  motion_df[subj] = read.csv(subj_quality_file)$relMeanRMSMotion
+}
+```
+
+```{r compute fc community}
+fc_com = lapply(atlases, function(atlas) get_fc_com(atlas, subj_net_files))
+names(fc_com) = atlases
+
+fc_com_mean = lapply(atlases, function(atlas) as.data.frame(sapply(fc_com[[atlas]], function(net_to_net) sapply(net_to_net, function(subj) mean(subj$V1, na.rm=T)))))
+names(fc_com_mean) = atlases
+
+
+```
+
+
+
+
+
+```{r merge  with gps}
+acc_subj_dx_sum = readRDS("~/Documents/xia_gps/beiwe_output_043020/Results/Group/acc_dx_demo_summary.RDS")
+fpt_fc = list()
+for (atlas in atlases){
+  fc_subjs = as.numeric(rownames(fc_com_mean[[atlas]]))
+  fc_com_mean[[atlas]]$BBLID = fc_subjs
+  fc_com_mean[[atlas]]$motion = value(motion_df)
+  fpt_fc[[atlas]] = merge(fc_com_mean[[atlas]], acc_subj_dx_sum, by = "BBLID")
+}
+
+
+get_fc_res = function(com_df){
+  com_df_res = com_df
+  for (i in 1:(dim(com_df)[2]-2)){
+    com_df_res[,i] = lm(com_df[,i] ~ com_df$motion)$residuals
+  }
+    return(com_df_res)
+}
+
+fc_com_mean_res = lapply(fc_com_mean, get_fc_res)
+fpt_fc_res = lapply(fc_com_mean_res, function(df) merge(df, acc_subj_dx_sum, by = "BBLID"))
+```
+
+
+
+```{r calc associations}
+atlas = atlases[3]
+fc_nets = names(fc_com_mean[[atlas]])[-c(length(fc_com_mean[[atlas]]),length(fc_com_mean[[atlas]])-1)]
+fpt_fc_p = data.frame(net = rep(NA, length(fc_nets)), p_val = rep(NA, length(fc_nets)))
+fpt_fc_fit = list()
+for (net in fc_nets){
+  net_i = which(fc_nets == net)
+  fit = lm(get(net)  ~ age + sex +  gps_days + motion + accgps, fpt_fc[[atlas]])
+  fit = lm(accgps  ~ age + sex + gps_days + acc_days  + motion + get(net), fpt_fc[[atlas]])
+  fpt_fc_p$net[net_i] = net
+  fpt_fc_p$p_val[net_i] = summary(fit)[[4]][,4][length(summary(fit)[[4]][,4])]
+  fpt_fc_fit[[net]] = fit
+}
+
+which(fpt_fc_p$p_val < 0.05)
+som_pval = fpt_fc_p[grep(glob2rx("*som*"),fpt_fc_p$net),]
+
+which(p.adjust(som_pval$p_val, "fdr") <0.05)
+which(p.adjust(fpt_fc_p$p_val, "fdr") <0.05)
+
+fc_nets[net_sig]
+fc_nets[which(fpt_fc_p$p_val < 0.05)]
+sig_fit = lm(`lim-lim`  ~ age + sex + motion + accgps, fpt_fc[[atlas]])
+visreg(sig_fit)
+```
