@@ -957,29 +957,37 @@ dev.off()
 ```
 
 ```{r age and sex}
-age_sex_gps_fit = lm(gps ~ age + sex + gps_days, acc_subj_dx_sum)
-age_sex_acc_fit = lm(acc ~ age + sex + acc_days, acc_subj_dx_sum)
-age_sex_accgps_fit = lm(accgps ~ age + sex + acc_days + gps_days, data = acc_subj_dx_sum)
+age_sex_gps_fit = gam(gps ~ s(age) + sex + gps_days, data = acc_subj_mood_df, method = "REML")
+age_sex_acc_fit = gam(acc ~ s(age) + sex + acc_days, data = acc_subj_mood_df, method = "REML")
+age_sex_accgps_fit = gam(accgps ~ s(age) + sex + acc_days + gps_days, data = acc_subj_mood_df, method = "REML")
 
-age_sex_accgps_fit = update(age_sex_accgps_fit,~.-age)
-age_sex_gps_fit = update(age_sex_gps_fit,~.-age)
-age_sex_acc_fit = update(age_sex_acc_fit,~.-age)
+age_sex_gps_res = gam(gps ~  s(age) + gps_days, data = acc_subj_mood_df, method = "REML")
+age_sex_acc_res = gam(acc ~  s(age)  + acc_days, data = acc_subj_mood_df, method = "REML")
+age_sex_accgps_res = gam(accgps ~ s(age)  + acc_days + gps_days, data = acc_subj_mood_df, method = "REML")
 
 
-anno_text = paste("R=",round(cor.test(update(age_sex_acc_fit,~.-age)$residuals,age_sex_acc_fit$model$age)$estimate,2), ", p=", round(summary(age_sex_acc_fit)[[4]][,4]["age"],3))
+#age
+anno_text = paste("r=",round(cor.test(age_sex_accgps_res$residuals,age_sex_accgps_fit$model$age)$estimate,2), ", p=", round(summary(age_sex_accgps_fit)[[8]],3))
 
-anno_text = paste("R=",round(sqrt(summary(lm(update(age_sex_acc_fit,~.-sex)$residuals ~ age_sex_acc_fit$model$sex))$r.squared),2), ", p=", round(summary(age_sex_acc_fit)[[4]][,4]["sex2"],5))
+#sex
+anno_text = paste("r=",round(sqrt(summary(lm(update(age_sex_accgps_fit,~.-sex)$residuals ~ age_sex_accgps_fit$model$sex))$r.squared),2), ", p=", round(summary(age_sex_accgps_fit)[[4]][2],4))
 
-p = visreg(age_sex_acc_fit, "sex", gg = T, line=list(col="#3576b5",size = 0.5, alpha = 1), 
-       points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"), alpha = 1)) + 
+#gps_days
+anno_text = paste("r=",round(sqrt(summary(lm(update(age_sex_acc_fit,~.-acc_days)$residuals ~ age_sex_acc_fit$model$acc_days))$r.squared),2), ", p=", round(summary(age_sex_acc_fit)[[4]][3],4))
+
+p = visreg(age_sex_accgps_fit, "sex", gg = T, line=list(col="#3576b5",size = 0.5, alpha = 0.25), 
+       points=list(size=2, pch=19), fill= list(fill=c("#b3d3f2"), alpha = 0.25)) + 
   xlab("Sex") + ylab("Individual Footprint Distinctiveness") + 
   theme_cowplot() + 
   annotate("text", -Inf, Inf, label = anno_text, hjust = -0.1, vjust = 1)
   
 
-pdf(file.path(paste0(output_path,"sex_acc_scatter_noage.pdf")),height = 4,width = 5)
+pdf(file.path(paste0(output_path,"sex_gpsacc_scatter_noage.pdf")),height = 4,width = 5)
 print(p)
 dev.off()
+
+
+
 
 p = visreg(lm(accgps ~ age + sex + acc_days + gps_days, acc_subj_dx_sum), "sex", gg = T, line=list(col="#3576b5",size = 0.5), 
        points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"))) + 
@@ -987,6 +995,18 @@ p = visreg(lm(accgps ~ age + sex + acc_days + gps_days, acc_subj_dx_sum), "sex",
   theme_cowplot()
 
 pdf(file.path(paste0(output_path,"Dx_ema.pdf")),height = 4,width = 5)
+print(p)
+dev.off()
+```
+
+```{r som_som}
+p = visreg(sig_fc_fit, "accgps", gg = T, line=list(col="#3576b5",size = 0.5), 
+       points=list( size=2, pch=19), fill= list(fill=c("#b3d3f2"))) + 
+  xlab("Individual Footprint Distinctiveness") + ylab("Within Somatomotor Network FC") + 
+  theme_cowplot() + 
+  annotate("text", -Inf, Inf, label = "R = 0.27, p = 0.046", hjust = -0.1, vjust = 1)
+
+pdf(file.path(paste0(output_path,"fc_som_accgps.pdf")),height = 4,width = 5)
 print(p)
 dev.off()
 ```

@@ -17,11 +17,11 @@ Affiliation: Penn Lifespan Informatics and Neuroimaging Center ([PennLINC](pennl
 ***
 
 
-This *GPS Footprinting project* is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7). These authors studied how personal differences in functional brain connectivity can identify individuals, mature during development, alter in neuropsychiatric illness, and differ between genders. The authors referred to these individual differences as *brain fingerprinting*.
+This *Mobile Footprinting Project* is inspired by [Finn et al. Nat Neuro  (2015)](https://www.nature.com/articles/nn.4135) and [Kaufmann et al. Nat Neuro (2015)](https://www.nature.com/articles/s41593-019-0471-7). These authors studied how personal differences in functional brain connectivity can identify individuals, mature during development, alter in neuropsychiatric illness, and differ between genders. The authors referred to these individual differences as *brain fingerprinting*.
 
-> Here, we apply the fingerprinting technique to highly sampled GPS data in a clinical sample of youth. We are interested in how their individual mobility patterns can distinguish one another's identity, differ between genders, and alter in psychopathological groups. In other words, can our footprint tell us apart and something about our behavior? 
+> Here, we apply the fingerprinting technique to highly sampled mobile sensing data in a clinical sample of youth. We are interested in how their individual mobility patterns can distinguish one another's identity, differ between genders, and alter in psychopathological groups. In other words, can our footprint tell us apart and something about our behavior? 
 
-GPS data preprocessing was performed according to [Ian Barnett's imputation algorithm](https://github.com/ianjamesbarnett/SmartphoneSensorPipeline), originally published in [Biostatistics (2020)](https://academic.oup.com/biostatistics/article-abstract/21/2/e98/5145908).
+GPS data preprocessing was performed according to [Ian Barnett's imputation algorithm](https://github.com/ianjamesbarnett/SmartphoneSensorPipeline), originally published in [Biostatistics (2020)](https://academic.oup.com/biostatistics/article-abstract/21/2/e98/5145908). Accelerometer data was performed according to [RAPIDS](https://www.rapids.science/latest/features/phone-accelerometer/).
 
 ### 1. Setup Environment 
 ```{r load libraries, message=FALSE}
@@ -220,10 +220,6 @@ part_times = 100
 subj_seq = make_subj_seq(gps_df_clean2, part_times)
 
 ```
-
-
-
-
 
 
 ### 5. Build Correlation Matrix
@@ -780,21 +776,6 @@ p_subj_cor_perm / p_subj_mean_perm / p_subj_rmssd_perm
 
 ### 13. Confounding variables
 ```{r subj accuracy cor with potential confounders, fig.height=6, fig.width=7, warning=FALSE, wmessage=FALSE}
-conf_scatter_plot = function(conf_var, acc_subj, col){
-  if (!identical(conf_var$IID,names(acc_subj))) {
-    stop("subj names do not match")
-  }
-  conf_df = data.frame(conf = unlist(conf_var[,col]), acc_subj = acc_subj)
-  conf_scatter = ggscatter(conf_df, y = "acc_subj", x = "conf",
-   add = "reg.line",  # Add regressin line
-   add.params = list(color = "black", fill = "lightgray"), # Customize reg. line
-   conf.int = TRUE # Add confidence interval
-   ) + stat_cor(method = "pearson") +
-    theme_cowplot() + theme(plot.title = element_text(hjust = 0.5)) +
-    labs(title = paste(col), y = "GPS Footprint \n Prediction Accuracy", x = col)
-  return(conf_scatter)
-  }
-
 subj_minmissing = gps_df_clean2 %>% group_by(IID) %>% summarise_if(is.numeric, mean, na.rm = TRUE)
 sp_plots = list()
 for (gps_ft in colnames(subj_minmissing)[-1]){
@@ -1350,7 +1331,7 @@ fa.sort(fa(moodsince_xcor,2,rotate="promax",n.obs = 2139))
 
 
 
-### 22. Associate with EMA
+### 23. Associate with EMA
 ```{r }
 
 get_question_ans = function(question_of_interest) {
@@ -1411,52 +1392,59 @@ mood_since_qs = 20:27
 sleep_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[sleep_qs], get_question_ans),function(q) q[[subj]]))$ans_num))
 mood_now_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[mood_now_qs], get_question_ans),function(q) q[[subj]]))$ans_num))
 mood_since_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[mood_since_qs], get_question_ans),function(q) q[[subj]]))$ans_num))
+mood_all_qs_cat_var = sapply(subj_list, function(subj) rmssd(rbindlist(lapply(lapply(q_list[c(mood_now_qs,mood_since_qs)], get_question_ans),function(q) q[[subj]]))$ans_num))
+
+sleep_qs_var = sapply(subj_list, function(subj) mean(sapply(lapply(q_list[sleep_qs], get_question_ans),function(q) rmssd(q[[subj]]$ans_num,na.rm=T))))
+mood_now_qs_var = sapply(subj_list, function(subj) mean(sapply(lapply(q_list[mood_now_qs], get_question_ans),function(q) rmssd(q[[subj]]$ans_num,na.rm=T))))
+mood_since_qs_var = sapply(subj_list, function(subj) mean(sapply(lapply(q_list[mood_since_qs], get_question_ans),function(q) rmssd(q[[subj]]$ans_num,na.rm=T))))
+mood_all_qs_var = sapply(subj_list, function(subj) mean(sapply(lapply(q_list[c(mood_now_qs,mood_since_qs)], get_question_ans),function(q) rmssd(q[[subj]]$ans_num,na.rm=T))))
+
 
 q_var_list = as.data.frame(sapply(q_list, function(q) {print(q); get_question_variance(q)}))
-q_var_list[,c("sleep_cat","mood_cat","mood_since_cat")] = cbind(sleep_qs_cat_var,mood_now_qs_cat_var,mood_since_qs_cat_var)
+q_var_list[,c("sleep_cat","mood_cat","mood_since_cat","mood_all_cat","sleep_qs","mood_qs","mood_since_qs","mood_all_qs")] = cbind(sleep_qs_cat_var,mood_now_qs_cat_var,mood_since_qs_cat_var,mood_all_qs_cat_var,sleep_qs_var,mood_now_qs_var,mood_since_qs_var,mood_all_qs_var)
 
-q_list_long = c(q_list_long,c("sleep_cat","mood_cat","mood_since_cat"))
+#q_list_long = c(q_list_long,c("sleep_cat","mood_cat","mood_since_cat"))
 
 q_var_list = cbind(q_var_list,sleep_param[,2:10])
 
-q_var_cor_mat = rquery.cormat(q_var_list, type = "full")
+#q_var_cor_mat = rquery.cormat(q_var_list, type = "full")
 
 
 get_q_var_pvals = function(question_of_interest){
   print(question_of_interest)
   q_var_lm_df = data.frame(acc_days = subj_acc_days$acc_days, gps_days = subj_days$`Days Collected`, mood_var = q_var_list[,question_of_interest], ifd_accgps =  value(acc_subj_cb_accgps), ifd_gps = value(acc_subj), age = psych_sum$admin_age, sex = as.factor(psych_sum$admin_sex))
   
-  q_var_gps_fit = lm(ifd_gps ~ mood_var + gps_days + age + sex, data = q_var_lm_df)
-  q_var_gps_p = summary(q_var_gps_fit)[[4]][,4]['mood_var']
+  q_var_gps_fit = gam(ifd_gps ~ mood_var + gps_days + s(age) + sex, data = q_var_lm_df, method = "REML")
+  q_var_gps_p = summary(q_var_gps_fit)[[4]]['mood_var']
   
-  q_var_accgps_fit = lm(ifd_accgps ~ mood_var + gps_days + acc_days + age + sex, data = q_var_lm_df)
-  q_var_accgps_p = summary(q_var_accgps_fit)[[4]][,4]['mood_var']
+  q_var_accgps_fit = gam(ifd_accgps ~ mood_var + gps_days + acc_days + s(age) + sex, data = q_var_lm_df,  method = "REML")
+  q_var_accgps_p = summary(q_var_accgps_fit)[[4]]['mood_var']
   
-  q_var_lm_df$res_gps = update(q_var_gps_fit, ~.-mood_var)$residuals
-  q_var_lm_df$res_accgps = update(q_var_accgps_fit, ~.-mood_var)$residuals
+  #q_var_lm_df$res_gps = update(q_var_gps_fit, ~.-mood_var)$residuals
+  #q_var_lm_df$res_accgps = update(q_var_accgps_fit, ~.-mood_var)$residuals
   
-  q_var_gps_res_fit = lm(res_gps ~ mood_var, data = q_var_lm_df)
-  q_var_accgps_res_fit = lm(res_accgps ~ mood_var, data = q_var_lm_df)
+  #q_var_gps_res_fit = lm(res_gps ~ mood_var, data = q_var_lm_df)
+  #q_var_accgps_res_fit = lm(res_accgps ~ mood_var, data = q_var_lm_df)
   
-  q_var_gps_res_p = summary(q_var_gps_res_fit)[[4]][,4]['mood_var']
-  q_var_accgps_res_p = summary(q_var_accgps_res_fit)[[4]][,4]['mood_var']
+  #q_var_gps_res_p = summary(q_var_gps_res_fit)[[4]][,4]['mood_var']
+  #q_var_accgps_res_p = summary(q_var_accgps_res_fit)[[4]][,4]['mood_var']
   
-  q_var_gps_res_cor = summary(q_var_gps_res_fit)[[8]]
-  q_var_accgps_res_cor = summary(q_var_accgps_res_fit)[[8]]
+  #q_var_gps_res_cor = summary(q_var_gps_res_fit)[[8]]
+  #q_var_accgps_res_cor = summary(q_var_accgps_res_fit)[[8]]
   
-  return(data.frame(p_gps = q_var_gps_p, p_accgps = q_var_accgps_p, rsqr_gps = q_var_gps_res_cor, rsqr_accgps = q_var_accgps_res_cor))
+  return(data.frame(p_gps = q_var_gps_p, p_accgps = q_var_accgps_p))
 }
 
 get_q_var_lm = function(question_of_interest){
   q_var_lm_df = data.frame(acc_days = subj_acc_days$acc_days, gps_days = subj_days$`Days Collected`, mood_var = q_var_list[,question_of_interest], ifd_accgps =  value(acc_subj_cb_accgps), ifd_gps = value(acc_subj), age = psych_sum$admin_age, sex = as.factor(psych_sum$admin_sex))
-  q_var_gps_p = lm(ifd_gps ~ mood_var + gps_days + age + sex, data = q_var_lm_df)
-  q_var_accgps_p = lm(ifd_accgps ~ mood_var  + gps_days + acc_days + age + sex, data = q_var_lm_df)
+  q_var_gps_p = gam(ifd_gps ~ mood_var + gps_days + s(age) + sex, data = q_var_lm_df, method = "REML")
+  q_var_accgps_p = gam(ifd_accgps ~ mood_var  + gps_days + acc_days + s(age) + sex, data = q_var_lm_df, method = "REML")
   
   return(list(gps = q_var_gps_p, accgps = q_var_accgps_p))
 }
 
 q_var_pvals = as.data.frame(t(sapply(names(q_var_list), get_q_var_pvals)))
-q_var_pvals = q_var_pvals[which(q_var_pvals$p_gps <0.1 | q_var_pvals$p_accgps <0.1),]
+q_var_pvals = q_var_pvals[which(q_var_pvals$p_gps <0.05 | q_var_pvals$p_accgps <0.05),]
 q_var_lms = lapply(rownames(q_var_pvals), get_q_var_lm)
 
 df_als_ari_ema = data.frame(als = psych_sum$sum_als, ari = psych_sum$sum_ari, ema = q_var_list$mood_since_cat)
@@ -1505,7 +1493,7 @@ gps_quant_acc_subj_3 = calc_acc_subj(gps_quant_match_cor_3)
 ### Clinical Dx
 ```{r }
 beiwe_dx = read.csv("/Users/hxia/Documents/xia_gps/data/clinical_data/beiwe_dx.csv")
-beiwe_dx = beiwe_dx[-duplicated(beiwe_dx$BBLID),]
+beiwe_dx = beiwe_dx[-39,]
 
 dx_sum_1 = rbind(beiwe_dx$AXIS1_DESC1,beiwe_dx$AXIS1_DESC2,beiwe_dx$AXIS1_DESC3,beiwe_dx$AXIS1_DESC4,beiwe_dx$AXIS1_DESC5,beiwe_dx$AXIS1_DESC6,beiwe_dx$AXIS1_DESC7,beiwe_dx$AXIS1_DESC8,beiwe_dx$AXIS1_DESC9,beiwe_dx$AXIS1_DESC10)
 
@@ -1567,14 +1555,14 @@ acc_subj_mood_df = data.frame(accgps = acc_subj_cb_accgps, gps = acc_subj,acc = 
 
 acc_subj_dx_sum = base::merge(dx_sum_all,acc_subj_mood_df)
 
-acc_subj_dx_sum_fit = lm(accgps ~ AxisII_Sum + gps_days + acc_days + sex + age, acc_subj_dx_sum)
+acc_subj_dx_sum_fit = gam(accgps ~ AxisII_Sum + gps_days + acc_days + sex + s(age), data = acc_subj_dx_sum, method = "REML")
 summary(lm(ari ~ AxisII_Sum + age + sex, acc_subj_dx_sum))
 
 
 saveRDS(acc_subj_dx_sum, "~/Documents/xia_gps/beiwe_output_043020/Results/Group/acc_dx_demo_summary.RDS")
 ```
 
-### 19. Misc Info
+### 24. Misc Info
 ```{r message=FALSE, warning=FALSE}
 #sessionInfo()
 ```
